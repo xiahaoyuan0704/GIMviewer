@@ -1,0 +1,68 @@
+***** Repair of database 'C:\Users\dingbin\Downloads\search for 'ERROR:' to find errors
+search for 'WARNING:' to find warnings
+checking database header
+ERROR: database was not shutdown cleanly (Dirty Shutdown)
+database file "C:\Users\dingbin\Downloads\database file "C:\Users\dingbin\Downloads\Creating 48 threads
+checking SystemRoot
+SystemRoot (OE)
+SystemRoot (AE)
+checking system tables
+MSysObjects 
+MSysObjectsShadow 
+MSysObjects Name
+MSysObjects RootObjects
+rebuilding and comparing indexes
+checking logical consistency of system tables
+MSysObjects
+MSysObjectsShadow
+MSysObjids
+Geometry:	34876:	checking table "Geometry" (11)
+Geometry:	34876:	checking data
+Geometry:	34876:	checking index "GeomStyleIndex" (14)
+Geometry:	34876:	checking index "GeomTypeIndex" (13)
+Geometry:	34876:	checking index "GeomHashIndex" (12)
+Geometry:	34876:	rebuilding and comparing indexes
+Geometry:	34876:	integrity-check of table "Geometry" (11) finishes with error 0 (0x0) after 0 seconds
+IfcEntities:	34876:	checking table "IfcEntities" (8)
+IfcEntities:	34876:	checking long value tree (21)
+IfcEntities:	34876:	checking data
+IfcEntities:	34876:	checking LV refcounts
+IfcEntities:	34876:	integrity-check of table "IfcEntities" (8) finishes with error 0 (0x0) after 0 seconds
+IfcEntitiesIndex:	34876:	checking table "IfcEntitiesIndex" (9)
+IfcEntitiesIndex:	34876:	checking data
+IfcEntitiesIndex:	34876:	integrity-check of table "IfcEntitiesIndex" (9) finishes with error 0 (0x0) after 0 seconds
+MetaData:	34876:	checking table "MetaData" (10)
+MetaData:	34876:	checking data
+MetaData:	34876:	integrity-check of table "MetaData" (10) finishes with error 0 (0x0) after 0 seconds
+MSysLocales:	34876:	checking table "MSysLocales" (7)
+MSysLocales:	34876:	checking data
+MSysLocales:	34876:	integrity-check of table "MSysLocales" (7) finishes with error 0 (0x0) after 0 seconds
+MSysObjids:	34876:	checking table "MSysObjids" (6)
+MSysObjids:	34876:	checking data
+MSysObjids:	34876:	integrity-check of table "MSysObjids" (6) finishes with error 0 (0x0) after 0 seconds
+ShapeGeometry:	34876:	checking table "ShapeGeometry" (22)
+ShapeGeometry:	34876:	checking long value tree (28)
+ShapeGeometry:	34876:	checking data
+ShapeGeometry:	34876:	checking index "ShapeGeomReferenceIndex" (23)
+ShapeGeometry:	34876:	checking LV refcounts
+ShapeGeometry:	34876:	rebuilding and comparing indexes
+ShapeGeometry:	34876:	integrity-check of table "ShapeGeometry" (22) finishes with error 0 (0x0) after 0 seconds
+ShapeInstances:	34876:	checking table "ShapeInstances" (24)
+ShapeInstances:	34876:	checking data
+ShapeInstances:	34876:	checking index "ProductTypeIndex" (27)
+ShapeInstances:	34876:	checking index "ProductIndex" (26)
+ShapeInstances:	34876:	checking index "GeometryShapeIndex" (25)
+ShapeInstances:	34876:	rebuilding and comparing indexes
+ShapeInstances:	34876:	integrity-check of table "ShapeInstances" (24) finishes with error 0 (0x0) after 0 seconds
+changing signature of C:\Users\dingbin\Downloads\new DB signature is:
+Create time:Create time:09/21/2023 05:35:26.568 Rand:3947124057 Computer:
+scanning the database from page 1 to page 1534
+changing signature of C:\Users\dingbin\Downloads\new DB signature is:
+Create time:Create time:09/21/2023 05:35:26.799 Rand:4199509310 Computer:
+
+Repair completed. Database corruption has been repaired!
+
+
+
+***** Eseutil completed in 1 seconds
+

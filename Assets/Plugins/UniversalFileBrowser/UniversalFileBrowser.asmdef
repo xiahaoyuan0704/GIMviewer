@@ -1,0 +1,26 @@
+{
+    "name": "UniversalFileBrowser",
+    "rootNamespace": "UFB",
+    "references": [],
+    "includePlatforms": [
+        "Android",
+        "Editor",
+        "iOS",
+        "LinuxStandalone64",
+        "macOSStandalone",
+        "WebGL",
+        "WindowsStandalone32",
+        "WindowsStandalone64"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "ShellFileDialogs.dll",
+        "ExternalProcess.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
