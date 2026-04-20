@@ -32,6 +32,7 @@ namespace cn.cssoftstudio.gimParser
         private GimFileInfo gimFileInfo;
         private GameObject root;
 		private Dictionary<Color, Material> matDic = new Dictionary<Color, Material>();
+		private readonly Dictionary<string, Dictionary<string, string>> propertyCache = new Dictionary<string, Dictionary<string, string>>();
 		private List<ProBuilderMesh> proBuilderMeshes = new List<ProBuilderMesh>(20);
 		private Dictionary<string, ProBuilderMesh> proBuilderMeshDic = new Dictionary<string, ProBuilderMesh>(20);
 		private List<ProBuilderMesh> proBuilderMeshes2 = new List<ProBuilderMesh>(20);
@@ -187,10 +188,103 @@ namespace cn.cssoftstudio.gimParser
 			if (root != null)
 			{
 				root.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+				AttachParsedProperties(root);
 			}
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\byq.fbx");
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\", "byq.fbx", "textures", true);
 			onParseFinished.Invoke();
+		}
+
+		private void AttachParsedProperties(GameObject rootObj)
+		{
+			var propertyNodes = rootObj.GetComponentsInChildren<GimProperty>(true);
+			foreach (var propertyNode in propertyNodes)
+			{
+				var items = LoadPropertyItems(propertyNode.filePath);
+				if (items.Count == 0)
+				{
+					continue;
+				}
+
+				var loadItem = propertyNode.GetComponent<GimLoadItem>();
+				if (loadItem == null)
+				{
+					loadItem = propertyNode.gameObject.AddComponent<GimLoadItem>();
+				}
+				loadItem.Items = items;
+			}
+		}
+
+		private Dictionary<string, string> LoadPropertyItems(string relativeOrAbsolutePath)
+		{
+			if (string.IsNullOrWhiteSpace(relativeOrAbsolutePath))
+			{
+				return new Dictionary<string, string>();
+			}
+
+			var fullPath = ResolvePropertyPath(relativeOrAbsolutePath);
+			if (fullPath == null)
+			{
+				return new Dictionary<string, string>();
+			}
+
+			if (propertyCache.TryGetValue(fullPath, out var cached))
+			{
+				return cached;
+			}
+
+			var result = new Dictionary<string, string>();
+			var lines = File.ReadAllLines(fullPath);
+			foreach (var line in lines)
+			{
+				if (string.IsNullOrWhiteSpace(line) || !line.Contains("="))
+				{
+					continue;
+				}
+
+				var split = line.Split(new[] { '=' }, 2, StringSplitOptions.RemoveEmptyEntries);
+				if (split.Length != 2)
+				{
+					continue;
+				}
+
+				var key = split[0].Trim();
+				var value = split[1].Trim();
+				if (string.IsNullOrWhiteSpace(key))
+				{
+					continue;
+				}
+				result[key] = value;
+			}
+
+			propertyCache[fullPath] = result;
+			return result;
+		}
+
+		private string ResolvePropertyPath(string rawPath)
+		{
+			if (Path.IsPathRooted(rawPath) && File.Exists(rawPath))
+			{
+				return rawPath;
+			}
+
+			var normalized = rawPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+			var candidates = new[]
+			{
+				Path.Combine(dirCBM ?? string.Empty, normalized),
+				Path.Combine(dirDEV ?? string.Empty, normalized),
+				Path.Combine(dirPHM ?? string.Empty, normalized),
+				Path.Combine(dirMOD ?? string.Empty, normalized),
+			};
+
+			foreach (var candidate in candidates)
+			{
+				if (!string.IsNullOrWhiteSpace(candidate) && File.Exists(candidate))
+				{
+					return candidate;
+				}
+			}
+			return null;
 		}
 
         private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
