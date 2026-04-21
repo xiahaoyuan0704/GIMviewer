@@ -38,6 +38,7 @@ namespace cn.cssoftstudio.gimParser
 		private List<ProBuilderMesh> proBuilderMeshes3 = new List<ProBuilderMesh>(20);
 
 		private int extractionFinishedInvoked = 0;
+		private const int BooleanCsgMaxTriangleCount = 20000;
 
 		private static string _Ifc2XbimUrl
 		{
@@ -117,6 +118,26 @@ namespace cn.cssoftstudio.gimParser
 				Destroy(root);
 				root = null;
 			}
+		}
+
+		private bool ShouldSkipBooleanOperation(ProBuilderMesh mesh1, ProBuilderMesh mesh2)
+		{
+			if (mesh1 == null || mesh2 == null)
+			{
+				return true;
+			}
+
+			var mf1 = mesh1.GetComponent<MeshFilter>();
+			var mf2 = mesh2.GetComponent<MeshFilter>();
+			var sharedMesh1 = mf1 != null ? mf1.sharedMesh : null;
+			var sharedMesh2 = mf2 != null ? mf2.sharedMesh : null;
+			if (sharedMesh1 == null || sharedMesh2 == null)
+			{
+				return true;
+			}
+
+			var triangleCount = (sharedMesh1.triangles.Length + sharedMesh2.triangles.Length) / 3;
+			return triangleCount > BooleanCsgMaxTriangleCount;
 		}
 
 		public async Task ParseGim()
@@ -1077,6 +1098,15 @@ namespace cn.cssoftstudio.gimParser
 						string Type = Boolean.Attributes["Type"].Value;
 						var e1 = proBuilderMeshDic[Entity1];
 						var e2 = proBuilderMeshDic[Entity2];
+						if (ShouldSkipBooleanOperation(e1, e2))
+						{
+							Debug.LogWarningFormat(
+								"Skip Boolean operation for {0} and {1} in {2}, triangle count is too large.",
+								Entity1,
+								Entity2,
+								Path.GetFileName(path));
+							continue;
+						}
 						var umesh = e1.GetComponent<MeshFilter>().sharedMesh;
 						MeshUtility.CollapseSharedVertices(umesh);
 						Mesh result = null;
