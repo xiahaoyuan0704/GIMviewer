@@ -39,6 +39,8 @@ namespace cn.cssoftstudio.gimParser
 
 		private int extractionFinishedInvoked = 0;
 		private const int BooleanCsgMaxTriangleCount = 20000;
+		[Header("Boolean CSG")]
+		public bool enableBooleanCSG = false;
 
 		private static string _Ifc2XbimUrl
 		{
@@ -1098,6 +1100,17 @@ namespace cn.cssoftstudio.gimParser
 						string Type = Boolean.Attributes["Type"].Value;
 						var e1 = proBuilderMeshDic[Entity1];
 						var e2 = proBuilderMeshDic[Entity2];
+						if (!enableBooleanCSG)
+						{
+							Debug.LogWarningFormat(
+								"Boolean CSG is disabled. Use entity {0} as fallback result for boolean node {1} in {2}.",
+								Entity1,
+								id,
+								Path.GetFileName(path));
+							proBuilderMeshDic[id] = e1;
+							e1.name = id + '-' + Path.GetFileName(path);
+							continue;
+						}
 						if (ShouldSkipBooleanOperation(e1, e2))
 						{
 							Debug.LogWarningFormat(
@@ -1105,6 +1118,8 @@ namespace cn.cssoftstudio.gimParser
 								Entity1,
 								Entity2,
 								Path.GetFileName(path));
+							proBuilderMeshDic[id] = e1;
+							e1.name = id + '-' + Path.GetFileName(path);
 							continue;
 						}
 						var umesh = e1.GetComponent<MeshFilter>().sharedMesh;
