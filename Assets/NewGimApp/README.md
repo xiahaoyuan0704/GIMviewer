@@ -1,11 +1,13 @@
 # NewGimApp (Starter)
 
-这是一个新的独立软件起步模块，目标是复用 GIMViewer 的 `.gim` 解析思路，先实现：
+这是一个新的独立软件起步模块，目标是复用 GIMViewer 的 `.gim` 解析思路，当前已实现：
 
 1. 导入 `.gim`
 2. 解压并读取 `CBM/project.cbm`
 3. 递归解析 `SUBSYSTEM` 树
-4. 读取 `BASEFAMILY` 属性到 `Dictionary<string,string>`
+4. 解析 `OBJECTMODELPOINTER -> DEV`，并递归解析 `SUBDEVICE`
+5. 解析 `SOLIDMODELS` 的 PHM/MOD/STL 文件引用
+6. 读取 `BASEFAMILY` 属性到 `Dictionary<string,string>`
 
 ## 包含脚本
 
@@ -24,10 +26,10 @@
    - `propertiesContent` -> 属性列表容器（Content）
    - `propertyRowPrefab` -> 包含 `key` / `value` 子节点的行预制体
 4. Play 后点击按钮，导入 `.gim`。
-5. 选择树节点后，属性面板会显示 `BASEFAMILY` 解析结果。
+5. 选择树节点后，属性面板会显示解析属性；树节点名称会带 `[CBM]/[DEV]/[PHM]/[MOD]/[STL]` 类型前缀。
 
 ## 下一步建议
 
-- 增加 DEV/PHM/MOD/STL 几何解析封装。
-- 把 `GimNode` 扩展为可直接绑定到树形控件的 ViewModel。
+- 增加 DEV/PHM/MOD/STL 几何解析封装（当前仅建立引用和结构）。
+- 把 `GimNode` 扩展为可直接绑定到树形控件的 ViewModel（减少中间对象转换）。
 - 增加模型几何渲染（MeshFilter/MeshRenderer）和选中高亮。

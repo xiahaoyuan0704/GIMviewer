@@ -91,7 +91,14 @@ namespace NewGimApp
             var text = e.ItemPresenter.GetComponentInChildren<Text>(true);
             if (text != null)
             {
-                text.text = item.Node != null ? item.Node.Name : "<null>";
+                if (item.Node != null)
+                {
+                    text.text = string.Format("[{0}] {1}", item.Node.NodeType, item.Node.Name);
+                }
+                else
+                {
+                    text.text = "<null>";
+                }
             }
 
             e.HasChildren = item.Children.Count > 0;
