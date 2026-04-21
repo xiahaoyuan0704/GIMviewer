@@ -32,10 +32,12 @@
 6. 选择树节点后：
    - 属性面板会显示解析属性；
    - 关联场景对象会高亮；
-   - STL 节点会生成实际 Mesh，PHM/MOD 先用占位体（Cube）渲染。
+   - STL 节点会生成实际 Mesh；
+   - PHM 会递归解析其 `SOLIDMODELS` 并渲染引用；
+   - MOD 支持基础图元渲染（Cuboid/Cylinder/Sphere，其他类型暂用小占位体）。
 
 ## 下一步建议
 
-- 增加 PHM/MOD 的真实几何解析（当前为占位体渲染）。
+- 增加 MOD 其余图元类型（Ring/TruncatedCone/Wire/Boolean 等）的几何渲染。
 - 把 `GimNode` 扩展为可直接绑定到树形控件的 ViewModel（减少中间对象转换）。
 - 优化大模型渲染性能（实例化、合批、LOD）。
