@@ -1,6 +1,7 @@
 using System.Text;
 using UnityEngine;
 using UFB;
+using System;
 
 namespace NewGimApp
 {
@@ -11,6 +12,8 @@ namespace NewGimApp
     public class GimAppDemoController : MonoBehaviour
     {
         private readonly GimAppParser parser = new GimAppParser();
+        public event Action<GimDocument> DocumentParsed;
+        public GimDocument LastDocument { get; private set; }
 
         public async void ImportGim()
         {
@@ -23,6 +26,7 @@ namespace NewGimApp
             try
             {
                 var document = await parser.ParseAsync(path);
+                LastDocument = document;
                 var sb = new StringBuilder();
                 sb.AppendLine("[NewGimApp] Parse completed");
                 sb.AppendLine("GIM: " + document.GimPath);
@@ -30,6 +34,10 @@ namespace NewGimApp
                 sb.AppendLine("Node Count: " + CountNodes(document.Root));
                 sb.AppendLine("Root: " + (document.Root != null ? document.Root.Name : "<null>"));
                 Debug.Log(sb.ToString());
+                if (DocumentParsed != null)
+                {
+                    DocumentParsed(document);
+                }
             }
             catch (System.Exception ex)
             {
