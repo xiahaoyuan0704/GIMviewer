@@ -1,3 +1,4 @@
+using UnityEngine;
 using System.Collections.Generic;
 
 namespace NewGimApp
@@ -10,6 +11,7 @@ namespace NewGimApp
         public Dictionary<string, string> Properties = new Dictionary<string, string>();
         public List<GimNode> Children = new List<GimNode>();
         public List<string> ModelFiles = new List<string>();
+        public GameObject RuntimeObject;
     }
 
     public class GimDocument

@@ -12,6 +12,7 @@ namespace NewGimApp
     public class GimAppTreeViewController : MonoBehaviour
     {
         public GimAppDemoController demoController;
+        public GimAppSceneRenderer sceneRenderer;
         public TreeView treeView;
         public GameObject propertiesContent;
         public GameObject propertyRowPrefab;
@@ -116,7 +117,12 @@ namespace NewGimApp
         private void OnSelectionChanged(object sender, SelectionChangedArgs e)
         {
             var item = e.NewItem as TreeItem;
-            RenderProperties(item != null ? item.Node : null);
+            var node = item != null ? item.Node : null;
+            RenderProperties(node);
+            if (sceneRenderer != null)
+            {
+                sceneRenderer.HighlightNode(node);
+            }
         }
 
         private void RenderProperties(GimNode node)
