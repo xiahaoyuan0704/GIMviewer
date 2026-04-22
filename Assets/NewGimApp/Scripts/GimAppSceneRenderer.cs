@@ -241,6 +241,10 @@ namespace NewGimApp
                 var cuboid = entity.SelectSingleNode("Cuboid");
                 var cylinder = entity.SelectSingleNode("Cylinder");
                 var sphere = entity.SelectSingleNode("Sphere");
+                var ring = entity.SelectSingleNode("Ring");
+                var truncatedCone = entity.SelectSingleNode("TruncatedCone");
+                var wire = entity.SelectSingleNode("Wire");
+                var circularGasket = entity.SelectSingleNode("CircularGasket");
 
                 if (cuboid != null)
                 {
@@ -263,6 +267,34 @@ namespace NewGimApp
                     shape = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                     shape.transform.localScale = Vector3.one * r * 2f;
                 }
+                else if (ring != null)
+                {
+                    var r = ParseFloat(ring, "R", 0.5f);
+                    var dr = ParseFloat(ring, "DR", 0.1f);
+                    shape = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    shape.transform.localScale = new Vector3((r + dr) * 2f, dr, (r + dr) * 2f);
+                }
+                else if (truncatedCone != null)
+                {
+                    var br = ParseFloat(truncatedCone, "BR", 0.5f);
+                    var tr = ParseFloat(truncatedCone, "TR", 0.25f);
+                    var h = ParseFloat(truncatedCone, "H", 1f);
+                    shape = CreateFrustum("TruncatedCone", br, tr, h, 24);
+                }
+                else if (wire != null)
+                {
+                    var startCoord = ParseVector3(wire, "StartCoord");
+                    var endCoord = ParseVector3(wire, "EndCoord");
+                    var d = ParseFloat(wire, "D", 0.05f);
+                    shape = CreateOrientedCylinder(startCoord, endCoord, d);
+                }
+                else if (circularGasket != null)
+                {
+                    var or = ParseFloat(circularGasket, "OR", 0.5f);
+                    var h = ParseFloat(circularGasket, "H", 0.1f);
+                    shape = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    shape.transform.localScale = new Vector3(or * 2f, h / 2f, or * 2f);
+                }
 
                 if (shape == null)
                 {
@@ -272,9 +304,16 @@ namespace NewGimApp
 
                 shape.name = entity.Attributes["ID"] != null ? entity.Attributes["ID"].Value : "MOD-Entity";
                 shape.transform.SetParent(parent, false);
-                shape.transform.localPosition = matrix.GetT();
-                shape.transform.localRotation = matrix.GetR();
-                shape.transform.localScale = Vector3.Scale(shape.transform.localScale, matrix.GetS());
+                if (wire == null)
+                {
+                    shape.transform.localPosition = matrix.GetT();
+                    shape.transform.localRotation = matrix.GetR();
+                    shape.transform.localScale = Vector3.Scale(shape.transform.localScale, matrix.GetS());
+                }
+                else
+                {
+                    ApplyMatrixToTransform(shape.transform, matrix);
+                }
                 var renderer = shape.GetComponent<MeshRenderer>();
                 if (renderer != null)
                 {
@@ -376,6 +415,83 @@ namespace NewGimApp
                 return result;
             }
             return 0f;
+        }
+
+        private Vector3 ParseVector3(XmlNode node, string attr)
+        {
+            if (node == null || node.Attributes == null || node.Attributes[attr] == null)
+            {
+                return Vector3.zero;
+            }
+
+            var comps = node.Attributes[attr].Value.Split(',');
+            if (comps.Length < 3)
+            {
+                return Vector3.zero;
+            }
+
+            return new Vector3(ParseFloat(comps[0]), ParseFloat(comps[1]), ParseFloat(comps[2]));
+        }
+
+        private GameObject CreateOrientedCylinder(Vector3 start, Vector3 end, float diameter)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            var dir = end - start;
+            var length = dir.magnitude;
+            if (length < 0.0001f)
+            {
+                length = 0.0001f;
+                dir = Vector3.up;
+            }
+            var center = (start + end) * 0.5f;
+            go.transform.localPosition = center;
+            go.transform.localRotation = Quaternion.FromToRotation(Vector3.up, dir.normalized);
+            go.transform.localScale = new Vector3(diameter, length * 0.5f, diameter);
+            return go;
+        }
+
+        private GameObject CreateFrustum(string name, float bottomRadius, float topRadius, float height, int segments)
+        {
+            var go = new GameObject(name);
+            var mesh = new Mesh();
+            var filter = go.AddComponent<MeshFilter>();
+            var renderer = go.AddComponent<MeshRenderer>();
+            filter.sharedMesh = mesh;
+            renderer.sharedMaterial = CreateMaterial(defaultColor);
+
+            var vertices = new List<Vector3>();
+            var triangles = new List<int>();
+            for (int i = 0; i < segments; i++)
+            {
+                var t = (float)i / segments * Mathf.PI * 2f;
+                var cos = Mathf.Cos(t);
+                var sin = Mathf.Sin(t);
+                vertices.Add(new Vector3(cos * bottomRadius, -height * 0.5f, sin * bottomRadius));
+                vertices.Add(new Vector3(cos * topRadius, height * 0.5f, sin * topRadius));
+            }
+
+            for (int i = 0; i < segments; i++)
+            {
+                var next = (i + 1) % segments;
+                var b0 = i * 2;
+                var t0 = b0 + 1;
+                var b1 = next * 2;
+                var t1 = b1 + 1;
+                triangles.Add(b0); triangles.Add(t0); triangles.Add(t1);
+                triangles.Add(b0); triangles.Add(t1); triangles.Add(b1);
+            }
+
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
+            mesh.RecalculateNormals();
+            return go;
+        }
+
+        private void ApplyMatrixToTransform(Transform transform, Matrix4x4 matrix)
+        {
+            transform.localPosition = matrix.GetT() + matrix.GetR() * transform.localPosition;
+            transform.localRotation = matrix.GetR() * transform.localRotation;
+            transform.localScale = Vector3.Scale(transform.localScale, matrix.GetS());
         }
 
         private Material CreateMaterial(Color color)

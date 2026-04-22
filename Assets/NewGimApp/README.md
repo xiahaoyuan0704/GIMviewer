@@ -34,10 +34,10 @@
    - 关联场景对象会高亮；
    - STL 节点会生成实际 Mesh；
    - PHM 会递归解析其 `SOLIDMODELS` 并渲染引用；
-   - MOD 支持基础图元渲染（Cuboid/Cylinder/Sphere，其他类型暂用小占位体）。
+   - MOD 支持基础图元渲染（Cuboid/Cylinder/Sphere/Ring/TruncatedCone/Wire/CircularGasket），其余类型暂用小占位体。
 
 ## 下一步建议
 
-- 增加 MOD 其余图元类型（Ring/TruncatedCone/Wire/Boolean 等）的几何渲染。
+- 增加 MOD 其余图元类型（Boolean/PorcelainBushing/Insulator 等）的几何渲染。
 - 把 `GimNode` 扩展为可直接绑定到树形控件的 ViewModel（减少中间对象转换）。
 - 优化大模型渲染性能（实例化、合批、LOD）。
