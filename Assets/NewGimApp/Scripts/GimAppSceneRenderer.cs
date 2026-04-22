@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using MeshMakerNamespace;
 using Parabox.Stl;
 using UnityEngine;
 
@@ -15,6 +16,8 @@ namespace NewGimApp
         public Transform sceneRoot;
         public Color defaultColor = new Color(0.75f, 0.75f, 0.75f, 1f);
         public Color selectedColor = new Color(1f, 0.9f, 0.2f, 1f);
+        public bool enableBooleanCSG = false;
+        public int maxBooleanTriangleCount = 20000;
 
         private readonly List<Renderer> highlightedRenderers = new List<Renderer>();
         private readonly Dictionary<Renderer, Color> rendererOriginalColors = new Dictionary<Renderer, Color>();
@@ -216,6 +219,7 @@ namespace NewGimApp
             var xml = new XmlDocument();
             xml.Load(modPath);
             var entities = xml.SelectNodes("//Entities/Entity");
+            var entityMap = new Dictionary<string, GameObject>();
             foreach (XmlNode entity in entities)
             {
                 var entityColor = fallbackColor;
@@ -245,6 +249,9 @@ namespace NewGimApp
                 var truncatedCone = entity.SelectSingleNode("TruncatedCone");
                 var wire = entity.SelectSingleNode("Wire");
                 var circularGasket = entity.SelectSingleNode("CircularGasket");
+                var porcelainBushing = entity.SelectSingleNode("PorcelainBushing");
+                var insulator = entity.SelectSingleNode("Insulator");
+                var boolean = entity.SelectSingleNode("Boolean");
 
                 if (cuboid != null)
                 {
@@ -295,6 +302,25 @@ namespace NewGimApp
                     shape = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     shape.transform.localScale = new Vector3(or * 2f, h / 2f, or * 2f);
                 }
+                else if (porcelainBushing != null)
+                {
+                    var r = ParseFloat(porcelainBushing, "R", 0.3f);
+                    var h = ParseFloat(porcelainBushing, "H", 1f);
+                    var count = Mathf.Max(1, Mathf.RoundToInt(ParseFloat(porcelainBushing, "N", 4)));
+                    shape = CreatePorcelainBushing(r, h, count);
+                }
+                else if (insulator != null)
+                {
+                    var n = Mathf.Max(1, Mathf.RoundToInt(ParseFloat(insulator, "N1", 6)));
+                    var h1 = ParseFloat(insulator, "H1", 0.12f);
+                    var r1 = ParseFloat(insulator, "R1", 0.2f);
+                    var r2 = ParseFloat(insulator, "R2", 0.15f);
+                    shape = CreateInsulator(r1, r2, h1, n);
+                }
+                else if (boolean != null)
+                {
+                    shape = TryApplyBoolean(boolean, entityMap, entityColor);
+                }
 
                 if (shape == null)
                 {
@@ -318,6 +344,11 @@ namespace NewGimApp
                 if (renderer != null)
                 {
                     renderer.sharedMaterial = CreateMaterial(entityColor);
+                }
+
+                if (entity.Attributes != null && entity.Attributes["ID"] != null)
+                {
+                    entityMap[entity.Attributes["ID"].Value] = shape;
                 }
             }
         }
@@ -492,6 +523,114 @@ namespace NewGimApp
             transform.localPosition = matrix.GetT() + matrix.GetR() * transform.localPosition;
             transform.localRotation = matrix.GetR() * transform.localRotation;
             transform.localScale = Vector3.Scale(transform.localScale, matrix.GetS());
+        }
+
+        private GameObject CreatePorcelainBushing(float radius, float height, int count)
+        {
+            var root = new GameObject("PorcelainBushing");
+            var step = height / count;
+            for (int i = 0; i < count; i++)
+            {
+                var seg = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                seg.transform.SetParent(root.transform, false);
+                var rr = radius * (0.85f + 0.15f * Mathf.Sin(i * 0.6f));
+                seg.transform.localScale = new Vector3(rr * 2f, step * 0.5f, rr * 2f);
+                seg.transform.localPosition = new Vector3(0f, -height * 0.5f + step * (i + 0.5f), 0f);
+            }
+            return root;
+        }
+
+        private GameObject CreateInsulator(float r1, float r2, float unitHeight, int count)
+        {
+            var root = new GameObject("Insulator");
+            for (int i = 0; i < count; i++)
+            {
+                var disk = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                disk.transform.SetParent(root.transform, false);
+                var rr = (i % 2 == 0) ? r1 : r2;
+                disk.transform.localScale = new Vector3(rr * 2f, unitHeight * 0.25f, rr * 2f);
+                disk.transform.localPosition = new Vector3(0f, unitHeight * i, 0f);
+            }
+            return root;
+        }
+
+        private GameObject TryApplyBoolean(XmlNode booleanNode, Dictionary<string, GameObject> entityMap, Color color)
+        {
+            if (booleanNode == null || booleanNode.Attributes == null)
+            {
+                return CreateBooleanMarker("Unknown");
+            }
+
+            var entity1 = booleanNode.Attributes["Entity1"] != null ? booleanNode.Attributes["Entity1"].Value : string.Empty;
+            var entity2 = booleanNode.Attributes["Entity2"] != null ? booleanNode.Attributes["Entity2"].Value : string.Empty;
+            var type = booleanNode.Attributes["Type"] != null ? booleanNode.Attributes["Type"].Value : "Unknown";
+
+            if (!enableBooleanCSG)
+            {
+                return CreateBooleanMarker(type);
+            }
+
+            GameObject go1;
+            GameObject go2;
+            if (!entityMap.TryGetValue(entity1, out go1) || !entityMap.TryGetValue(entity2, out go2) || ShouldSkipBoolean(go1, go2))
+            {
+                return CreateBooleanMarker(type);
+            }
+
+            try
+            {
+                Mesh result = null;
+                if (type == "Difference")
+                {
+                    result = CSG.Subtract(go1, go2, false, false);
+                }
+                else if (type == "Union")
+                {
+                    result = CSG.Union(go1, go2, false, false);
+                }
+
+                if (result == null)
+                {
+                    return CreateBooleanMarker(type);
+                }
+
+                var go = new GameObject("Boolean-CSG");
+                go.AddComponent<MeshFilter>().sharedMesh = result;
+                go.AddComponent<MeshRenderer>().sharedMaterial = CreateMaterial(color);
+                return go;
+            }
+            catch
+            {
+                return CreateBooleanMarker(type);
+            }
+        }
+
+        private bool ShouldSkipBoolean(GameObject go1, GameObject go2)
+        {
+            var mf1 = go1 != null ? go1.GetComponent<MeshFilter>() : null;
+            var mf2 = go2 != null ? go2.GetComponent<MeshFilter>() : null;
+            if (mf1 == null || mf2 == null || mf1.sharedMesh == null || mf2.sharedMesh == null)
+            {
+                return true;
+            }
+
+            var triangles = (mf1.sharedMesh.triangles.Length + mf2.sharedMesh.triangles.Length) / 3;
+            return triangles > maxBooleanTriangleCount;
+        }
+
+        private GameObject CreateBooleanMarker(string type)
+        {
+            var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            marker.name = "Boolean-" + type;
+            marker.transform.localScale = Vector3.one * 0.25f;
+            var renderer = marker.GetComponent<MeshRenderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = CreateMaterial(type == "Difference"
+                    ? new Color(1f, 0.45f, 0.45f, 1f)
+                    : new Color(0.45f, 0.8f, 1f, 1f));
+            }
+            return marker;
         }
 
         private Material CreateMaterial(Color color)

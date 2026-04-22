@@ -34,10 +34,14 @@
    - 关联场景对象会高亮；
    - STL 节点会生成实际 Mesh；
    - PHM 会递归解析其 `SOLIDMODELS` 并渲染引用；
-   - MOD 支持基础图元渲染（Cuboid/Cylinder/Sphere/Ring/TruncatedCone/Wire/CircularGasket），其余类型暂用小占位体。
+   - MOD 支持基础图元渲染（Cuboid/Cylinder/Sphere/Ring/TruncatedCone/Wire/CircularGasket）；
+   - PorcelainBushing/Insulator 提供近似分段渲染；
+   - Boolean 支持可选真实 CSG（`enableBooleanCSG=true` 且不超阈值）；
+   - CSG 不可用时自动降级为类型可视化标记；
+   - 其余类型暂用小占位体。
 
 ## 下一步建议
 
-- 增加 MOD 其余图元类型（Boolean/PorcelainBushing/Insulator 等）的几何渲染。
+- 扩充 Boolean 链式布尔与稳定性优化（超限降级策略细化）。
 - 把 `GimNode` 扩展为可直接绑定到树形控件的 ViewModel（减少中间对象转换）。
 - 优化大模型渲染性能（实例化、合批、LOD）。
