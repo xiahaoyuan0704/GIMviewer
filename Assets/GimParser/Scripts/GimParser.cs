@@ -23,6 +23,9 @@ namespace cn.cssoftstudio.gimParser
 		public UnityEvent onParseFinished;
         public string gimFilePath;
 		public int smooth = 20;
+		[Header("Advanced")]
+		[Tooltip("Boolean CSG operations can trigger stack overflow on complex/invalid models. Keep disabled for stability.")]
+		public bool enableBooleanCsg = false;
 
 		private string dir;
         private string dirCBM;
@@ -1072,7 +1075,14 @@ namespace cn.cssoftstudio.gimParser
 				{
 					string Entity1 = Boolean.Attributes["Entity1"].Value;
 					string Entity2 = Boolean.Attributes["Entity2"].Value;
-					if (proBuilderMeshDic.ContainsKey(Entity1) && proBuilderMeshDic.ContainsKey(Entity2))
+					if (!enableBooleanCsg)
+					{
+						if (proBuilderMeshDic.ContainsKey(Entity1))
+						{
+							proBuilderMeshDic[id] = proBuilderMeshDic[Entity1];
+						}
+					}
+					else if (proBuilderMeshDic.ContainsKey(Entity1) && proBuilderMeshDic.ContainsKey(Entity2))
 					{
 						string Type = Boolean.Attributes["Type"].Value;
 						var e1 = proBuilderMeshDic[Entity1];
