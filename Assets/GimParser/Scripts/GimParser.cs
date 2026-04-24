@@ -114,6 +114,27 @@ namespace cn.cssoftstudio.gimParser
 			}
 		}
 
+		public bool TryGetProperties(Transform target, out Dictionary<string, string> properties)
+		{
+			properties = null;
+			if (target == null)
+			{
+				return false;
+			}
+			var current = target;
+			while (current != null)
+			{
+				var property = current.GetComponent<GimProperty>();
+				if (property != null && !string.IsNullOrEmpty(property.filePath))
+				{
+					properties = ReadPropertyFile(property.filePath);
+					return properties != null && properties.Count > 0;
+				}
+				current = current.parent;
+			}
+			return false;
+		}
+
 		public void Clear()
 		{
 			if (root != null)
@@ -189,10 +210,70 @@ namespace cn.cssoftstudio.gimParser
 			if (root != null)
 			{
 				root.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+				EnsureSelectableColliders(root);
 			}
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\byq.fbx");
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\", "byq.fbx", "textures", true);
 			onParseFinished.Invoke();
+		}
+
+		private Dictionary<string, string> ReadPropertyFile(string propertyFile)
+		{
+			var candidates = new List<string>();
+			if (!string.IsNullOrEmpty(dirCBM))
+			{
+				candidates.Add(Path.Combine(dirCBM, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dirDEV))
+			{
+				candidates.Add(Path.Combine(dirDEV, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dir))
+			{
+				candidates.Add(Path.Combine(dir, propertyFile));
+			}
+			foreach (var path in candidates)
+			{
+				if (!File.Exists(path))
+				{
+					continue;
+				}
+				var map = new Dictionary<string, string>();
+				var lines = File.ReadAllLines(path);
+				foreach (var line in lines)
+				{
+					var parts = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
+					if (parts.Length >= 3)
+					{
+						map[parts[1].Trim()] = parts[2].Trim();
+					}
+					else if (parts.Length >= 2)
+					{
+						map[parts[0].Trim()] = parts[1].Trim();
+					}
+				}
+				return map;
+			}
+			return null;
+		}
+
+		private void EnsureSelectableColliders(GameObject modelRoot)
+		{
+			var meshFilters = modelRoot.GetComponentsInChildren<MeshFilter>(true);
+			foreach (var meshFilter in meshFilters)
+			{
+				if (meshFilter.sharedMesh == null)
+				{
+					continue;
+				}
+				var go = meshFilter.gameObject;
+				var collider = go.GetComponent<MeshCollider>();
+				if (collider == null)
+				{
+					collider = go.AddComponent<MeshCollider>();
+				}
+				collider.sharedMesh = meshFilter.sharedMesh;
+			}
 		}
 
 		private void CreateRootIfNeeded()
