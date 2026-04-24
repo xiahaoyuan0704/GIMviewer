@@ -39,6 +39,7 @@ namespace cn.cssoftstudio.gimParser
 		private Dictionary<string, ProBuilderMesh> proBuilderMeshDic = new Dictionary<string, ProBuilderMesh>(20);
 		private List<ProBuilderMesh> proBuilderMeshes2 = new List<ProBuilderMesh>(20);
 		private List<ProBuilderMesh> proBuilderMeshes3 = new List<ProBuilderMesh>(20);
+		private readonly HashSet<string> parsingDevStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		private int extractionFinishedInvoked = 0;
 
@@ -122,9 +123,10 @@ namespace cn.cssoftstudio.gimParser
 			}
 		}
 
-		public async Task ParseGim()
+        public async Task ParseGim()
         {
             extractionFinishedInvoked = 0;
+			parsingDevStack.Clear();
 
 			SevenZipBase.SetLibraryPath(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
 
@@ -142,50 +144,47 @@ namespace cn.cssoftstudio.gimParser
 
         private IEnumerator ParseDataFiles()
         {
-            var projPath = Path.Combine(dirCBM, "project.cbm");
-            if (File.Exists(projPath))
+			CreateRootIfNeeded();
+			if (!Directory.Exists(dirCBM))
+			{
+				yield return ParseWithoutCbm();
+			}
+			else
             {
-                root = new GameObject();
-                if (!string.IsNullOrEmpty(gimFileInfo.fileName))
-                {
-                    root.name = gimFileInfo.fileName;
+				var projPath = Path.Combine(dirCBM, "project.cbm");
+				if (File.Exists(projPath))
+				{
+					string[] lines = null;
+					yield return Task.Run(() => {
+						lines = File.ReadAllLines(projPath);
+					});
+					Debug.LogFormat("parse file: {0}", projPath);
+					for (int i = 0; i < lines.Length; i++)
+					{
+						var line = lines[i];
+						var segments = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
+						var k = segments[0].Trim();
+						var v = segments[1].Trim();
+						if (k.Equals("SUBSYSTEM"))
+						{
+							var path = Path.Combine(dirCBM, v);
+							yield return ParseCbmFile(path, 1, root);
+						}
+					}
+					Debug.LogFormat("完成");
 				}
-                else
-                {
-					var fileInfo = new FileInfo(gimFilePath);
-					root.name = fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length);
+				else
+				{
+					var files = Directory.GetFiles(dirCBM, "*.cbm");
+					if (files.Length == 1)
+					{
+						yield return ParseCbmFile(files[0], 1, root);
+					}
+					else
+					{
+						yield return ParseWithoutCbm();
+					}
 				}
-				string[] lines = null;
-                yield return Task.Run(() => {
-					lines = File.ReadAllLines(projPath);
-				});
-                Debug.LogFormat("parse file: {0}", projPath);
-                for (int i = 0; i < lines.Length; i++)
-                {
-                    var line = lines[i];
-                    var segments = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
-                    var k = segments[0].Trim();
-                    var v = segments[1].Trim();
-                    if (k.Equals("SUBSYSTEM"))
-                    {
-                        var path = Path.Combine(dirCBM, v);
-                        yield return ParseCbmFile(path, 1, root);
-                    }
-                }
-				Debug.LogFormat("完成");
-			} 
-            else
-            {
-                var files = Directory.GetFiles(dirCBM);
-                if (files.Length != 1 || files.Length == 0)
-                {
-                    Debug.LogWarning("设备模型文件损坏（包含0个或多个*.cbm文件）");
-                    yield break;
-                }
-                root = new GameObject();
-				var fileInfo = new FileInfo(gimFilePath);
-				root.name = fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length);
-				yield return ParseCbmFile(files[0], 1, root);
 			}
 			if (root != null)
 			{
@@ -194,6 +193,75 @@ namespace cn.cssoftstudio.gimParser
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\byq.fbx");
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\", "byq.fbx", "textures", true);
 			onParseFinished.Invoke();
+		}
+
+		private void CreateRootIfNeeded()
+		{
+			if (root != null)
+			{
+				return;
+			}
+			root = new GameObject();
+			if (!string.IsNullOrEmpty(gimFileInfo?.fileName))
+			{
+				root.name = gimFileInfo.fileName;
+			}
+			else
+			{
+				var fileInfo = new FileInfo(gimFilePath);
+				root.name = fileInfo.Name.Substring(0, fileInfo.Name.Length - fileInfo.Extension.Length);
+			}
+		}
+
+		private IEnumerator ParseWithoutCbm()
+		{
+			if (!Directory.Exists(dirDEV))
+			{
+				Debug.LogWarning("设备模型文件损坏（缺少CBM且DEV目录不存在）");
+				yield break;
+			}
+			var devFiles = Directory.GetFiles(dirDEV, "*.dev", SearchOption.TopDirectoryOnly);
+			if (devFiles.Length == 0)
+			{
+				Debug.LogWarning("设备模型文件损坏（缺少CBM且没有可解析的DEV文件）");
+				yield break;
+			}
+			var referencedSubDevs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+			foreach (var devFile in devFiles)
+			{
+				var lines = File.ReadAllLines(devFile);
+				foreach (var line in lines)
+				{
+					var parts = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
+					if (parts.Length < 2)
+					{
+						continue;
+					}
+					var key = parts[0].Trim();
+					if (key.StartsWith("SUBDEVICE", StringComparison.OrdinalIgnoreCase))
+					{
+						referencedSubDevs.Add(parts[1].Trim());
+					}
+				}
+			}
+			var rootDevFiles = new List<string>();
+			foreach (var devFile in devFiles)
+			{
+				var fileName = Path.GetFileName(devFile);
+				if (!referencedSubDevs.Contains(fileName))
+				{
+					rootDevFiles.Add(devFile);
+				}
+			}
+			if (rootDevFiles.Count == 0)
+			{
+				rootDevFiles.AddRange(devFiles);
+			}
+			Debug.LogWarning($"未找到有效CBM，切换到DEV直解析模式，根设备数量: {rootDevFiles.Count}");
+			foreach (var devFile in rootDevFiles)
+			{
+				yield return ParseDevFile(devFile, root, Matrix4x4.identity);
+			}
 		}
 
         private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
@@ -344,6 +412,13 @@ namespace cn.cssoftstudio.gimParser
 
 		private IEnumerator ParseDevFile(string path, GameObject parent, Matrix4x4 mat)
 		{
+			var normalizedPath = Path.GetFullPath(path).Replace("\\", "/");
+			if (!parsingDevStack.Add(normalizedPath))
+			{
+				Debug.LogWarning($"检测到循环DEV引用，跳过: {path}");
+				yield break;
+			}
+
 			var obj = new GameObject();
 			obj.transform.SetParent(parent.transform, false);
 			obj.transform.localPosition = mat.GetT();
@@ -425,6 +500,7 @@ namespace cn.cssoftstudio.gimParser
 			}
 			nameParts.Add(Path.GetFileName(path));
 			obj.name = string.Join("-", nameParts);
+			parsingDevStack.Remove(normalizedPath);
 		}
 
 		private IEnumerator ParsePhmFile(string path, GameObject parent, Matrix4x4 mat)
