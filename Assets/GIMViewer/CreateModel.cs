@@ -29,6 +29,9 @@ public class CreateModel : MonoBehaviour
     private Dictionary<Color, Material> matDic = new Dictionary<Color, Material>();
     private GameObject rootGameObject;
     private float ratio = 0.001f;
+    private const int MaxRecursiveDepth = 64;
+    private readonly HashSet<string> phmRecursionStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> devRecursionStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     private static string _7zExeUrl
     {
@@ -1117,7 +1120,8 @@ public class CreateModel : MonoBehaviour
 
     public IEnumerator LoadModel(string Loadpath)
     {
-
+        phmRecursionStack.Clear();
+        devRecursionStack.Clear();
         fileUrl = Loadpath;
         yield return Load();
         GimUIController.treeItems = TreeGameObjects;
@@ -1125,8 +1129,20 @@ public class CreateModel : MonoBehaviour
 
     }
 
-    IEnumerator LoadDev2(GameObject parent, string fileName, Matrix4x4 mat, MyCustomData f4MyCustomData)
+    IEnumerator LoadDev2(GameObject parent, string fileName, Matrix4x4 mat, MyCustomData f4MyCustomData, int depth = 0)
     {
+        if (depth > MaxRecursiveDepth)
+        {
+            UnityEngine.Debug.LogWarning($"Skip DEV due to too much recursion depth: {fileName}");
+            yield break;
+        }
+        var normalizedDevFile = Path.GetFullPath(fileName).Replace("\\", "/");
+        if (!devRecursionStack.Add(normalizedDevFile))
+        {
+            UnityEngine.Debug.LogWarning($"Detected cyclic DEV reference, skip file: {fileName}");
+            yield break;
+        }
+
         Dictionary<string, string> f5Dictionary = getPropertiesDev(fileName);
         Dictionary<string, string> f2PropertiesFam = getPropertiesFam(path + "\\DEV\\" + f5Dictionary["BASEFAMILYPOINTER"]);
         var dev = ProBuilderMesh.Create();
@@ -1183,21 +1199,34 @@ public class CreateModel : MonoBehaviour
         for (int i = 0; i < subDevNums; i++)
         {
             //自身矩阵
-            string[] strings2 = f5Dictionary["SOLIDMODEL.TRANSFORMMATRIX" + i].Split(",");
+            string[] strings2 = f5Dictionary["SUBDEVICES.TRANSFORMMATRIX" + i].Split(",");
             var m4 = new Matrix4x4(new Vector4(float.Parse(strings2[0]), float.Parse(strings2[1]), float.Parse(strings2[2]), float.Parse(strings2[3])), new Vector4(float.Parse(strings2[4]), float.Parse(strings2[5]), float.Parse(strings2[6]), float.Parse(strings2[7])), new Vector4(float.Parse(strings2[8]), float.Parse(strings2[9]), float.Parse(strings2[10]), float.Parse(strings2[11])), new Vector4(float.Parse(strings2[12]) * ratio, float.Parse(strings2[13]) * ratio, float.Parse(strings2[14]) * ratio, float.Parse(strings2[15])));
-            yield return LoadDev2(dev.gameObject, path + "//DEV//" + f5Dictionary["SUBDEVICE" + i], m4, myCustomData);
+            yield return LoadDev2(dev.gameObject, path + "//DEV//" + f5Dictionary["SUBDEVICE" + i], m4, myCustomData, depth + 1);
         }
         f4MyCustomData.childs.Add(myCustomData);
+        devRecursionStack.Remove(normalizedDevFile);
     }
 
-    private IEnumerator LoadPhm2(GameObject parent, Matrix4x4 mat, string phmPath, List<GameObject> unsupportCombineObjs, UnityAction<ProBuilderMesh> action)
+    private IEnumerator LoadPhm2(GameObject parent, Matrix4x4 mat, string phmPath, List<GameObject> unsupportCombineObjs, UnityAction<ProBuilderMesh> action, int depth = 0)
     {
+        if (depth > MaxRecursiveDepth)
+        {
+            UnityEngine.Debug.LogWarning($"Skip PHM due to too much recursion depth: {phmPath}");
+            yield break;
+        }
+        var normalizedPhmPath = Path.GetFullPath(phmPath).Replace("\\", "/");
+        if (!phmRecursionStack.Add(normalizedPhmPath))
+        {
+            UnityEngine.Debug.LogWarning($"Detected cyclic PHM reference, skip file: {phmPath}");
+            yield break;
+        }
+
         Dictionary<string, string> f5Dictionary = getProperties(phmPath);
         List<ProBuilderMesh> models = new List<ProBuilderMesh>() { };
         var modNums = int.Parse(f5Dictionary["SOLIDMODELS.NUM"]);
         for (int i = 0; i < modNums; i++)
         {
-            string type = f5Dictionary["SOLIDMODEL" + i].Split(".")[1];
+            string type = Path.GetExtension(f5Dictionary["SOLIDMODEL" + i]).TrimStart('.').ToLowerInvariant();
             string[] strings2 = f5Dictionary["TRANSFORMMATRIX" + i].Split(",");
             var m4 = new Matrix4x4(new Vector4(float.Parse(strings2[0]), float.Parse(strings2[1]), float.Parse(strings2[2]), float.Parse(strings2[3])), new Vector4(float.Parse(strings2[4]), float.Parse(strings2[5]), float.Parse(strings2[6]), float.Parse(strings2[7])), new Vector4(float.Parse(strings2[8]), float.Parse(strings2[9]), float.Parse(strings2[10]), float.Parse(strings2[11])), new Vector4(float.Parse(strings2[12]) * ratio, float.Parse(strings2[13]) * ratio, float.Parse(strings2[14]) * ratio, float.Parse(strings2[15])));
             if (type.Equals("mod"))
@@ -1218,7 +1247,7 @@ public class CreateModel : MonoBehaviour
                     {
                         models.Add(result);
                     }
-                });
+                }, depth + 1);
             }
             if (type.Equals("stl"))
             {
@@ -1243,6 +1272,7 @@ public class CreateModel : MonoBehaviour
             }
             action.Invoke(models[0]);
         }
+        phmRecursionStack.Remove(normalizedPhmPath);
     }
 
     private IEnumerator LoadProject(string path)
@@ -1458,21 +1488,21 @@ public class CreateModel : MonoBehaviour
     }
     public IEnumerator Load()
     {
-        string[] fileUrlSplit = fileUrl.Split(".");
-        string filePath = fileUrlSplit[0] + "\\";
+        var filePathWithoutExtension = Path.Combine(Path.GetDirectoryName(fileUrl) ?? string.Empty, Path.GetFileNameWithoutExtension(fileUrl));
+        string filePath = filePathWithoutExtension + "\\";
         path = filePath;
         //不存在文件夹
-        if (!Directory.Exists(fileUrlSplit[0]))
+        if (!Directory.Exists(filePathWithoutExtension))
         {//创建
-            Directory.CreateDirectory(fileUrlSplit[0]);
-            string fileName = fileUrlSplit[0] + "\\" + System.IO.Path.GetFileName(fileUrl).Split(".")[0] + ".zip";
+            Directory.CreateDirectory(filePathWithoutExtension);
+            string fileName = filePathWithoutExtension + "\\" + System.IO.Path.GetFileNameWithoutExtension(fileUrl) + ".zip";
             File.Copy(fileUrl, fileName, true);
-            DecompressFileToDirectory(fileName, fileUrlSplit[0] + "\\");
+            DecompressFileToDirectory(fileName, filePathWithoutExtension + "\\");
         }
         //判断是否是子模型
         rootGameObject = new GameObject();
         rootGameObject.transform.rotation = Quaternion.Euler(-90, 0, 0);
-        if (Directory.GetFiles(filePath + "\\CBM").Length > 1)
+        if (File.Exists(filePath + "\\CBM\\project.cbm"))
         {
             yield return LoadProject(filePath);
         }
