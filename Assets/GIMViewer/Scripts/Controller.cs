@@ -306,6 +306,8 @@ public class Controller : MonoBehaviour
         scrollbar.handleRect = handleRt;
         scrollRect.verticalScrollbar = scrollbar;
         scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+
+        header.transform.SetAsLastSibling();
     }
 
     private void HandlePickProperty()

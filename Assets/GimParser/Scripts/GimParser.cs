@@ -13,6 +13,7 @@ using UnityEngine.ProBuilder.MeshOperations;
 using UnityEngine.ProBuilder;
 using Debug = UnityEngine.Debug;
 using System.Collections;
+using System.Globalization;
 using MeshMakerNamespace;
 using UnityEngine.Events;
 
@@ -371,6 +372,45 @@ namespace cn.cssoftstudio.gimParser
 			return true;
 		}
 
+		private static bool TryParseMatrix(string csv, out Matrix4x4 matrix)
+		{
+			matrix = Matrix4x4.identity;
+			if (string.IsNullOrWhiteSpace(csv))
+			{
+				return false;
+			}
+			var comps = csv.Split(",");
+			if (comps.Length < 16)
+			{
+				return false;
+			}
+			var values = new float[16];
+			for (var i = 0; i < 16; i++)
+			{
+				if (!float.TryParse(comps[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+				{
+					return false;
+				}
+				if (float.IsNaN(parsed) || float.IsInfinity(parsed))
+				{
+					return false;
+				}
+				values[i] = parsed;
+			}
+			matrix = new Matrix4x4(
+				new Vector4(values[0], values[1], values[2], values[3]),
+				new Vector4(values[4], values[5], values[6], values[7]),
+				new Vector4(values[8], values[9], values[10], values[11]),
+				new Vector4(values[12], values[13], values[14], values[15]));
+
+			var t = matrix.GetT();
+			if (float.IsNaN(t.x) || float.IsNaN(t.y) || float.IsNaN(t.z))
+			{
+				return false;
+			}
+			return true;
+		}
+
 		private void EnsureSelectableColliders(GameObject modelRoot)
 		{
 			var meshFilters = modelRoot.GetComponentsInChildren<MeshFilter>(true);
@@ -561,11 +601,12 @@ namespace cn.cssoftstudio.gimParser
 				}
 				else if (k.Equals("TRANSFORMMATRIX")) //四级设备（设施）- 相对变电站原点的空间变换矩阵
 				{
-					string[] comps = v.Split(",");
-					var mat = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-					obj.transform.localPosition = mat.GetT();
-					obj.transform.localRotation = mat.GetR();
-					obj.transform.localScale = mat.GetS();
+					if (TryParseMatrix(v, out var matrix))
+					{
+						obj.transform.localPosition = matrix.GetT();
+						obj.transform.localRotation = matrix.GetR();
+						obj.transform.localScale = matrix.GetS();
+					}
 				}
 				else if (level < 5 && k.Equals("OBJECTMODELPOINTER")) //四级设备（设施）- dev文件引用
 				{
@@ -661,9 +702,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matDev = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-						yield return ParseDevFile(Path.Combine(dirDEV, v), obj, matDev);
+						if (TryParseMatrix(lineMatSegments[1], out var matDev))
+						{
+							yield return ParseDevFile(Path.Combine(dirDEV, v), obj, matDev);
+						}
 					}
 					i += len;
 				}
@@ -678,9 +720,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matPhm = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-						yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
+						if (TryParseMatrix(lineMatSegments[1], out var matPhm))
+						{
+							yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
+						}
 					}
 					i += len;
 				}
@@ -737,8 +780,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matPhm = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
+						if (!TryParseMatrix(lineMatSegments[1], out var matPhm))
+						{
+							continue;
+						}
 						if (ext.Equals(".PHM"))
 						{
 							yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
@@ -838,8 +883,10 @@ namespace cn.cssoftstudio.gimParser
 				XmlNode EquilateralAngleSteel = entityNode.SelectSingleNode("EquilateralAngleSteel");
 				XmlNode FlatSteel = entityNode.SelectSingleNode("FlatSteel");
 				var v = TransformMatrix.Attributes["Value"].Value;
-				string[] stringsv = v.Split(",");
-				var m = new Matrix4x4(new Vector4(float.Parse(stringsv[0]), float.Parse(stringsv[1]), float.Parse(stringsv[2]), float.Parse(stringsv[3])), new Vector4(float.Parse(stringsv[4]), float.Parse(stringsv[5]), float.Parse(stringsv[6]), float.Parse(stringsv[7])), new Vector4(float.Parse(stringsv[8]), float.Parse(stringsv[9]), float.Parse(stringsv[10]), float.Parse(stringsv[11])), new Vector4(float.Parse(stringsv[12]), float.Parse(stringsv[13]), float.Parse(stringsv[14]), float.Parse(stringsv[15])));
+				if (!TryParseMatrix(v, out var m))
+				{
+					continue;
+				}
 				m = matrix * m;
 
 				if (stretchedBodyNode != null)
