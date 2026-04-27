@@ -125,10 +125,40 @@ namespace cn.cssoftstudio.gimParser
 			while (current != null)
 			{
 				var property = current.GetComponent<GimProperty>();
-				if (property != null && !string.IsNullOrEmpty(property.filePath))
+				if (property != null)
 				{
-					properties = ReadPropertyFile(property.filePath);
-					return properties != null && properties.Count > 0;
+					var result = new Dictionary<string, string>();
+					if (property.filePaths.Count > 0)
+					{
+						foreach (var file in property.filePaths)
+						{
+							var item = ReadPropertyFile(file);
+							if (item == null)
+							{
+								continue;
+							}
+							foreach (var kv in item)
+							{
+								result[kv.Key] = kv.Value;
+							}
+						}
+					}
+					else if (!string.IsNullOrEmpty(property.filePath))
+					{
+						var item = ReadPropertyFile(property.filePath);
+						if (item != null)
+						{
+							foreach (var kv in item)
+							{
+								result[kv.Key] = kv.Value;
+							}
+						}
+					}
+					if (result.Count > 0)
+					{
+						properties = result;
+						return true;
+					}
 				}
 				current = current.parent;
 			}
@@ -219,7 +249,15 @@ namespace cn.cssoftstudio.gimParser
 
 		private Dictionary<string, string> ReadPropertyFile(string propertyFile)
 		{
+			if (string.IsNullOrWhiteSpace(propertyFile))
+			{
+				return null;
+			}
 			var candidates = new List<string>();
+			if (Path.IsPathRooted(propertyFile))
+			{
+				candidates.Add(propertyFile);
+			}
 			if (!string.IsNullOrEmpty(dirCBM))
 			{
 				candidates.Add(Path.Combine(dirCBM, propertyFile));
@@ -227,6 +265,14 @@ namespace cn.cssoftstudio.gimParser
 			if (!string.IsNullOrEmpty(dirDEV))
 			{
 				candidates.Add(Path.Combine(dirDEV, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dirPHM))
+			{
+				candidates.Add(Path.Combine(dirPHM, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dirMOD))
+			{
+				candidates.Add(Path.Combine(dirMOD, propertyFile));
 			}
 			if (!string.IsNullOrEmpty(dir))
 			{
@@ -345,10 +391,12 @@ namespace cn.cssoftstudio.gimParser
 			}
 		}
 
-        private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
+		private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
         {
             var obj = new GameObject();
 			obj.transform.SetParent(parent.transform, false);
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
@@ -376,8 +424,7 @@ namespace cn.cssoftstudio.gimParser
 				}
 				else if (k.Equals("BASEFAMILY"))
 				{
-					var property = obj.AddComponent<GimProperty>();
-					property.filePath = v;
+					objProperty.AddFilePath(v);
 				}
 				else if (k.Equals("SYSTEMNAME1")) //三级子系统（子区域）- 系统名称
 				{
@@ -505,6 +552,8 @@ namespace cn.cssoftstudio.gimParser
 			obj.transform.localPosition = mat.GetT();
 			obj.transform.localRotation = mat.GetR();
 			obj.transform.localScale = mat.GetS();
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
@@ -529,10 +578,9 @@ namespace cn.cssoftstudio.gimParser
 				{
 					nameParts.Add(v);
 				}
-				else if (k.Equals("BASEFAMILY"))
+				else if (k.Equals("BASEFAMILY") || k.Equals("BASEFAMILYPOINTER"))
 				{
-					var property = obj.AddComponent<GimProperty>();
-					property.filePath = v;
+					objProperty.AddFilePath(v);
 				}
 				else if (k.Equals("SUBDEVICES.NUM")) //引用的dev文件数量
 				{
@@ -591,6 +639,8 @@ namespace cn.cssoftstudio.gimParser
 			obj.transform.localPosition = mat.GetT();
 			obj.transform.localRotation = mat.GetR();
 			obj.transform.localScale = mat.GetS();
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
