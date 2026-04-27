@@ -122,16 +122,21 @@ namespace cn.cssoftstudio.gimParser
 				return false;
 			}
 			var current = target;
+			var result = new Dictionary<string, string>();
+			var visitedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			while (current != null)
 			{
 				var property = current.GetComponent<GimProperty>();
 				if (property != null)
 				{
-					var result = new Dictionary<string, string>();
 					if (property.filePaths.Count > 0)
 					{
 						foreach (var file in property.filePaths)
 						{
+							if (string.IsNullOrWhiteSpace(file) || !visitedFiles.Add(file))
+							{
+								continue;
+							}
 							var item = ReadPropertyFile(file);
 							if (item == null)
 							{
@@ -139,28 +144,33 @@ namespace cn.cssoftstudio.gimParser
 							}
 							foreach (var kv in item)
 							{
-								result[kv.Key] = kv.Value;
+								AddPropertyEntry(result, kv.Key, kv.Value);
 							}
 						}
 					}
 					else if (!string.IsNullOrEmpty(property.filePath))
 					{
+						if (!visitedFiles.Add(property.filePath))
+						{
+							current = current.parent;
+							continue;
+						}
 						var item = ReadPropertyFile(property.filePath);
 						if (item != null)
 						{
 							foreach (var kv in item)
 							{
-								result[kv.Key] = kv.Value;
+								AddPropertyEntry(result, kv.Key, kv.Value);
 							}
 						}
 					}
-					if (result.Count > 0)
-					{
-						properties = result;
-						return true;
-					}
 				}
 				current = current.parent;
+			}
+			if (result.Count > 0)
+			{
+				properties = result;
+				return true;
 			}
 			return false;
 		}
@@ -288,19 +298,77 @@ namespace cn.cssoftstudio.gimParser
 				var lines = File.ReadAllLines(path);
 				foreach (var line in lines)
 				{
-					var parts = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
-					if (parts.Length >= 3)
+					if (TryParsePropertyLine(line, out var key, out var value))
 					{
-						map[parts[1].Trim()] = parts[2].Trim();
-					}
-					else if (parts.Length >= 2)
-					{
-						map[parts[0].Trim()] = parts[1].Trim();
+						map[key] = value;
 					}
 				}
 				return map;
 			}
 			return null;
+		}
+
+		private static void AddPropertyEntry(Dictionary<string, string> map, string key, string value)
+		{
+			if (string.IsNullOrWhiteSpace(key))
+			{
+				return;
+			}
+			var normalizedKey = key.Trim();
+			var normalizedValue = value == null ? string.Empty : value.Trim();
+			if (!map.ContainsKey(normalizedKey))
+			{
+				map[normalizedKey] = normalizedValue;
+				return;
+			}
+			var i = 2;
+			var alias = $"{normalizedKey}#{i}";
+			while (map.ContainsKey(alias))
+			{
+				i++;
+				alias = $"{normalizedKey}#{i}";
+			}
+			map[alias] = normalizedValue;
+		}
+
+		private static bool TryParsePropertyLine(string line, out string key, out string value)
+		{
+			key = null;
+			value = null;
+			if (string.IsNullOrWhiteSpace(line))
+			{
+				return false;
+			}
+			var trimmed = line.Trim();
+			var firstEq = trimmed.IndexOf('=');
+			if (firstEq <= 0 || firstEq >= trimmed.Length - 1)
+			{
+				return false;
+			}
+
+			var left = trimmed.Substring(0, firstEq).Trim();
+			var right = trimmed.Substring(firstEq + 1).Trim();
+			if (string.IsNullOrEmpty(left))
+			{
+				return false;
+			}
+
+			var secondEq = right.IndexOf('=');
+			if (secondEq > 0)
+			{
+				var middle = right.Substring(0, secondEq).Trim();
+				var tail = right.Substring(secondEq + 1).Trim();
+				if (int.TryParse(left, out _) && !string.IsNullOrEmpty(middle))
+				{
+					key = middle;
+					value = tail;
+					return true;
+				}
+			}
+
+			key = left;
+			value = right;
+			return true;
 		}
 
 		private void EnsureSelectableColliders(GameObject modelRoot)
