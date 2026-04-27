@@ -211,17 +211,17 @@ public class Controller : MonoBehaviour
         headerRt.anchorMin = new Vector2(0, 1);
         headerRt.anchorMax = new Vector2(1, 1);
         headerRt.pivot = new Vector2(0.5f, 1);
-        headerRt.sizeDelta = new Vector2(0, 32);
+        headerRt.sizeDelta = new Vector2(0, 40);
         var headerImage = header.GetComponent<Image>();
-        headerImage.color = new Color(1, 1, 1, 0.12f);
+        headerImage.color = new Color(0, 0, 0, 0.8f);
 
         var headerTextGo = new GameObject("HeaderText", typeof(RectTransform), typeof(Text));
         headerTextGo.transform.SetParent(header.transform, false);
         var headerTextRt = headerTextGo.GetComponent<RectTransform>();
         headerTextRt.anchorMin = new Vector2(0, 0);
         headerTextRt.anchorMax = new Vector2(1, 1);
-        headerTextRt.offsetMin = new Vector2(10, 0);
-        headerTextRt.offsetMax = new Vector2(-10, 0);
+        headerTextRt.offsetMin = new Vector2(10, 4);
+        headerTextRt.offsetMax = new Vector2(-10, -4);
         var headerText = headerTextGo.GetComponent<Text>();
         headerText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
         headerText.fontSize = 14;
@@ -235,7 +235,7 @@ public class Controller : MonoBehaviour
         viewportRt.anchorMin = new Vector2(0, 0);
         viewportRt.anchorMax = new Vector2(1, 1);
         viewportRt.offsetMin = new Vector2(10, 10);
-        viewportRt.offsetMax = new Vector2(-28, -38);
+        viewportRt.offsetMax = new Vector2(-28, -48);
         viewport.GetComponent<Image>().color = new Color(0, 0, 0, 0.2f);
         viewport.GetComponent<Mask>().showMaskGraphic = false;
 
@@ -279,7 +279,7 @@ public class Controller : MonoBehaviour
         scrollbarRt.pivot = new Vector2(1, 1);
         scrollbarRt.sizeDelta = new Vector2(14, 0);
         scrollbarRt.offsetMin = new Vector2(-14, 10);
-        scrollbarRt.offsetMax = new Vector2(-4, -38);
+        scrollbarRt.offsetMax = new Vector2(-4, -48);
         scrollbarObj.GetComponent<Image>().color = new Color(1, 1, 1, 0.18f);
 
         var slidingArea = new GameObject("SlidingArea", typeof(RectTransform));
