@@ -931,7 +931,7 @@ namespace cn.cssoftstudio.gimParser
 
 					proBuilderMesh.CreateShapeFromPolygon(vector3s, 0f, false);
 
-					var vertices = proBuilderMesh.GetVertices();
+					var vertices = proBuilderMesh.GetVertices()?.ToList();
 					if (vertices == null || vertices.Count == 0 || proBuilderMesh.faces == null || proBuilderMesh.faces.Count == 0)
 					{
 						Destroy(proBuilderMesh.gameObject);
