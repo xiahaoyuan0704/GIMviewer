@@ -896,13 +896,30 @@ namespace cn.cssoftstudio.gimParser
 					string array = stretchedBodyNode.Attributes["Array"].Value;
 					string[] strings = array.Split(";");
 					string[] normals = normal.Split(",");
+					if (normals.Length < 3)
+					{
+						continue;
+					}
 					Vector3 vector3Normal = new Vector3(float.Parse(normals[0]), float.Parse(normals[1]), float.Parse(normals[2]));
-					Vector3[] vector3s = new Vector3[strings.Length];
+					var points = new List<Vector3>(strings.Length);
 					for (int i = 0; i < strings.Length; i++)
 					{
+						if (string.IsNullOrWhiteSpace(strings[i]))
+						{
+							continue;
+						}
 						string[] strings1 = strings[i].Split(",");
-						vector3s[i] = new Vector3(float.Parse(strings1[0]), float.Parse(strings1[1]), float.Parse(strings1[2]));
+						if (strings1.Length < 3)
+						{
+							continue;
+						}
+						points.Add(new Vector3(float.Parse(strings1[0]), float.Parse(strings1[1]), float.Parse(strings1[2])));
 					}
+					if (points.Count < 3)
+					{
+						continue;
+					}
+					var vector3s = points.ToArray();
 					ProBuilderMesh proBuilderMesh = ProBuilderMesh.Create();
 					proBuilderMesh.gameObject.transform.SetParent(parent.transform, false);
 					proBuilderMesh.gameObject.transform.localPosition = m.GetT();
@@ -915,6 +932,11 @@ namespace cn.cssoftstudio.gimParser
 					proBuilderMesh.CreateShapeFromPolygon(vector3s, 0f, false);
 
 					var vertices = proBuilderMesh.GetVertices();
+					if (vertices == null || vertices.Count == 0 || proBuilderMesh.faces == null || proBuilderMesh.faces.Count == 0)
+					{
+						Destroy(proBuilderMesh.gameObject);
+						continue;
+					}
 
 					if (Vector3.Dot(vertices[0].normal, vector3Normal) < 0)
 					{
@@ -938,6 +960,11 @@ namespace cn.cssoftstudio.gimParser
 					proBuilderMesh.Refresh();*/
 
 					proBuilderMesh.DuplicateAndFlip(proBuilderMesh.faces.ToArray());
+					if (proBuilderMesh.faces.Count == 0)
+					{
+						Destroy(proBuilderMesh.gameObject);
+						continue;
+					}
 					proBuilderMesh.Extrude(new Face[] { proBuilderMesh.faces[0] }, ExtrudeMethod.IndividualFaces, float.Parse(length));
 					proBuilderMesh.ToMesh();
 					proBuilderMesh.Refresh();
