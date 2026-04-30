@@ -32,7 +32,8 @@ public class PropertyPanelResize : MonoBehaviour, IBeginDragHandler, IDragHandle
         {
             return;
         }
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, eventData.pressEventCamera, out var localPoint))
+        Vector2 localPoint;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, eventData.pressEventCamera, out localPoint))
         {
             canResize = localPoint.x >= (rectTransform.rect.xMax - HandleSize) && localPoint.y <= (rectTransform.rect.yMin + HandleSize);
         }

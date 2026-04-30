@@ -28,7 +28,8 @@ public class PropertyPanelDrag : MonoBehaviour, IBeginDragHandler, IDragHandler
         {
             return;
         }
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, eventData.pressEventCamera, out var localPoint))
+        Vector2 localPoint;
+        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(rectTransform, eventData.position, eventData.pressEventCamera, out localPoint))
         {
             canDrag = localPoint.y >= (rectTransform.rect.yMax - 40f);
         }
