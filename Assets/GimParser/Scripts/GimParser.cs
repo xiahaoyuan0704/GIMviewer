@@ -27,6 +27,8 @@ namespace cn.cssoftstudio.gimParser
 		[Header("Advanced")]
 		[Tooltip("Boolean CSG operations can trigger stack overflow on complex/invalid models. Keep disabled for stability.")]
 		public bool enableBooleanCsg = false;
+		[Tooltip("Enable verbose parser debug logs (matrix parsing, property resolving and skipped invalid entries).")]
+		public bool enableDebugLogs = false;
 
 		private string dir;
         private string dirCBM;
@@ -43,6 +45,15 @@ namespace cn.cssoftstudio.gimParser
 		private readonly HashSet<string> parsingDevStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		private int extractionFinishedInvoked = 0;
+
+		private void LogDebug(string message)
+		{
+			if (!enableDebugLogs)
+			{
+				return;
+			}
+			Debug.Log($"[GimParserDebug] {message}");
+		}
 
 		private static string _Ifc2XbimUrl
 		{
@@ -295,6 +306,7 @@ namespace cn.cssoftstudio.gimParser
 				{
 					continue;
 				}
+				LogDebug($"ReadPropertyFile hit: {path}");
 				var map = new Dictionary<string, string>();
 				var lines = File.ReadAllLines(path);
 				foreach (var line in lines)
@@ -409,6 +421,16 @@ namespace cn.cssoftstudio.gimParser
 				return false;
 			}
 			return true;
+		}
+
+		private bool TryParseMatrixWithDebug(string csv, string context, out Matrix4x4 matrix)
+		{
+			var ok = TryParseMatrix(csv, out matrix);
+			if (!ok)
+			{
+				LogDebug($"Invalid matrix skipped at {context}. raw='{csv}'");
+			}
+			return ok;
 		}
 
 		private void EnsureSelectableColliders(GameObject modelRoot)
@@ -601,7 +623,7 @@ namespace cn.cssoftstudio.gimParser
 				}
 				else if (k.Equals("TRANSFORMMATRIX")) //四级设备（设施）- 相对变电站原点的空间变换矩阵
 				{
-					if (TryParseMatrix(v, out var matrix))
+					if (TryParseMatrixWithDebug(v, $"CBM TRANSFORMMATRIX file={path}", out var matrix))
 					{
 						obj.transform.localPosition = matrix.GetT();
 						obj.transform.localRotation = matrix.GetR();
@@ -702,7 +724,7 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						if (TryParseMatrix(lineMatSegments[1], out var matDev))
+						if (TryParseMatrixWithDebug(lineMatSegments[1], $"DEV SUBDEVICE matrix file={path} target={v}", out var matDev))
 						{
 							yield return ParseDevFile(Path.Combine(dirDEV, v), obj, matDev);
 						}
@@ -720,7 +742,7 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						if (TryParseMatrix(lineMatSegments[1], out var matPhm))
+						if (TryParseMatrixWithDebug(lineMatSegments[1], $"DEV SOLIDMODEL matrix file={path} target={v}", out var matPhm))
 						{
 							yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
 						}
@@ -780,7 +802,7 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						if (!TryParseMatrix(lineMatSegments[1], out var matPhm))
+						if (!TryParseMatrixWithDebug(lineMatSegments[1], $"PHM SOLIDMODEL matrix file={path} target={v}", out var matPhm))
 						{
 							continue;
 						}
@@ -883,7 +905,7 @@ namespace cn.cssoftstudio.gimParser
 				XmlNode EquilateralAngleSteel = entityNode.SelectSingleNode("EquilateralAngleSteel");
 				XmlNode FlatSteel = entityNode.SelectSingleNode("FlatSteel");
 				var v = TransformMatrix.Attributes["Value"].Value;
-				if (!TryParseMatrix(v, out var m))
+				if (!TryParseMatrixWithDebug(v, $"MOD Entity Transform file={path} id={id}", out var m))
 				{
 					continue;
 				}
