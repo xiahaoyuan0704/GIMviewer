@@ -246,8 +246,16 @@ public class Controller : MonoBehaviour
         headerText.color = Color.white;
         headerText.text = "属性面板（标题固定，可拖动/缩放）";
 
+        var body = new GameObject("Body", typeof(RectTransform));
+        body.transform.SetParent(panel.transform, false);
+        var bodyRt = body.GetComponent<RectTransform>();
+        bodyRt.anchorMin = new Vector2(0, 0);
+        bodyRt.anchorMax = new Vector2(1, 1);
+        bodyRt.offsetMin = new Vector2(0, 0);
+        bodyRt.offsetMax = new Vector2(0, -46);
+
         var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-        viewport.transform.SetParent(panel.transform, false);
+        viewport.transform.SetParent(body.transform, false);
         var viewportRt = viewport.GetComponent<RectTransform>();
         viewportRt.anchorMin = new Vector2(0, 0);
         viewportRt.anchorMax = new Vector2(1, 1);
@@ -278,7 +286,7 @@ public class Controller : MonoBehaviour
         fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        var scrollRect = panel.AddComponent<ScrollRect>();
+        var scrollRect = body.AddComponent<ScrollRect>();
         scrollRect.viewport = viewportRt;
         scrollRect.content = contentRt;
         scrollRect.horizontal = false;
@@ -289,7 +297,7 @@ public class Controller : MonoBehaviour
         propertyScrollRect = scrollRect;
 
         var scrollbarObj = new GameObject("Scrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
-        scrollbarObj.transform.SetParent(panel.transform, false);
+        scrollbarObj.transform.SetParent(body.transform, false);
         var scrollbarRt = scrollbarObj.GetComponent<RectTransform>();
         scrollbarRt.anchorMin = new Vector2(1, 0);
         scrollbarRt.anchorMax = new Vector2(1, 1);
