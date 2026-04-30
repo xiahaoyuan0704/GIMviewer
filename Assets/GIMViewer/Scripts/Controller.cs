@@ -22,6 +22,7 @@ public class Controller : MonoBehaviour
 
     private Text propertyText;
     private ScrollRect propertyScrollRect;
+    private GameObject propertyPanel;
 
     private bool CanExport
     {
@@ -89,28 +90,42 @@ public class Controller : MonoBehaviour
     {
         btnOpen.onClick.AddListener(this.handleOpen);
         btnExport.onClick.AddListener(this.handleExport);
-        btnAbout.onClick.AddListener(this.handleAbout);
+        btnAbout.onClick.AddListener(this.TogglePropertyPanel);
         gimParser.onParseFinished.AddListener(this.handleParseFinished);
+        SetPropertyButtonLabel("属性");
         CanExport = false;
         Loading = false;
         DialogCompVisible = false;
-        int firstLaunch = PlayerPrefs.GetInt("firstLaunch", 1);
-        if (firstLaunch == 1)
-        {
-            DialogAboutVisible = true;
-            PlayerPrefs.SetInt("firstLaunch", 0);
-        }
-        else
-        {
-            DialogAboutVisible = false;
-        }
+        DialogAboutVisible = false;
 
         BuildPropertyPanel();
+        SetPropertyPanelVisible(false);
     }
 
-    private void handleAbout()
+    private void SetPropertyButtonLabel(string text)
     {
-        DialogAboutVisible = true;
+        if (btnAbout == null)
+        {
+            return;
+        }
+        var label = btnAbout.GetComponentInChildren<Text>();
+        if (label != null)
+        {
+            label.text = text;
+        }
+    }
+
+    private void TogglePropertyPanel()
+    {
+        SetPropertyPanelVisible(propertyPanel == null || !propertyPanel.activeSelf);
+    }
+
+    private void SetPropertyPanelVisible(bool visible)
+    {
+        if (propertyPanel != null)
+        {
+            propertyPanel.SetActive(visible);
+        }
     }
 
     private void handleParseFinished()
@@ -194,6 +209,7 @@ public class Controller : MonoBehaviour
         }
 
         var panel = new GameObject("PropertyPanel", typeof(RectTransform), typeof(Image));
+        propertyPanel = panel;
         panel.transform.SetParent(canvas.transform, false);
         var panelRt = panel.GetComponent<RectTransform>();
         panelRt.anchorMin = new Vector2(1, 0);
@@ -204,6 +220,7 @@ public class Controller : MonoBehaviour
         var panelImage = panel.GetComponent<Image>();
         panelImage.color = new Color(0, 0, 0, 0.45f);
         panel.AddComponent<PropertyPanelDrag>();
+        panel.AddComponent<PropertyPanelResize>();
 
         var header = new GameObject("Header", typeof(RectTransform), typeof(Image));
         header.transform.SetParent(panel.transform, false);
@@ -227,7 +244,7 @@ public class Controller : MonoBehaviour
         headerText.fontSize = 14;
         headerText.alignment = TextAnchor.MiddleLeft;
         headerText.color = Color.white;
-        headerText.text = "属性面板（可拖动，可上下滚动）";
+        headerText.text = "属性面板（标题固定，可拖动/缩放）";
 
         var viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
         viewport.transform.SetParent(panel.transform, false);
