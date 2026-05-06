@@ -29,6 +29,10 @@ namespace cn.cssoftstudio.gimParser
 		public bool enableBooleanCsg = false;
 		[Tooltip("Enable verbose parser debug logs (matrix parsing, property resolving and skipped invalid entries).")]
 		public bool enableDebugLogs = false;
+		[Tooltip("Use lightweight colliders for picking to improve performance on very large models.")]
+		public bool useLightweightPickCollider = true;
+		[Tooltip("Meshes with vertex count above this threshold will use BoxCollider instead of MeshCollider when lightweight mode is enabled.")]
+		public int meshColliderVertexThreshold = 4000;
 
 		private string dir;
         private string dirCBM;
@@ -443,12 +447,30 @@ namespace cn.cssoftstudio.gimParser
 					continue;
 				}
 				var go = meshFilter.gameObject;
+				var mesh = meshFilter.sharedMesh;
+				if (useLightweightPickCollider && mesh.vertexCount > meshColliderVertexThreshold)
+				{
+					var meshCollider = go.GetComponent<MeshCollider>();
+					if (meshCollider != null)
+					{
+						Destroy(meshCollider);
+					}
+					var boxCollider = go.GetComponent<BoxCollider>();
+					if (boxCollider == null)
+					{
+						boxCollider = go.AddComponent<BoxCollider>();
+					}
+					boxCollider.center = mesh.bounds.center;
+					boxCollider.size = mesh.bounds.size;
+					continue;
+				}
+
 				var collider = go.GetComponent<MeshCollider>();
 				if (collider == null)
 				{
 					collider = go.AddComponent<MeshCollider>();
 				}
-				collider.sharedMesh = meshFilter.sharedMesh;
+				collider.sharedMesh = mesh;
 			}
 		}
 
