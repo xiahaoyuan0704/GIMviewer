@@ -234,6 +234,7 @@ namespace cn.cssoftstudio.gimParser
 			var candidates = new List<string>();
 			candidates.Add(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
 			candidates.Add(Path.Combine(Path.GetDirectoryName(Application.dataPath), "7z.dll"));
+			candidates.Add(Path.Combine(Application.streamingAssetsPath, "7-Zip", "7z.dll"));
 			foreach (var path in candidates)
 			{
 				if (File.Exists(path))
