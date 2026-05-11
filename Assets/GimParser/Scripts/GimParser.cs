@@ -13,6 +13,7 @@ using UnityEngine.ProBuilder.MeshOperations;
 using UnityEngine.ProBuilder;
 using Debug = UnityEngine.Debug;
 using System.Collections;
+using System.Globalization;
 using MeshMakerNamespace;
 using UnityEngine.Events;
 
@@ -26,6 +27,12 @@ namespace cn.cssoftstudio.gimParser
 		[Header("Advanced")]
 		[Tooltip("Boolean CSG operations can trigger stack overflow on complex/invalid models. Keep disabled for stability.")]
 		public bool enableBooleanCsg = false;
+		[Tooltip("Enable verbose parser debug logs (matrix parsing, property resolving and skipped invalid entries).")]
+		public bool enableDebugLogs = false;
+		[Tooltip("Use lightweight colliders for picking to improve performance on very large models.")]
+		public bool useLightweightPickCollider = true;
+		[Tooltip("Meshes with vertex count above this threshold will use BoxCollider instead of MeshCollider when lightweight mode is enabled.")]
+		public int meshColliderVertexThreshold = 4000;
 
 		private string dir;
         private string dirCBM;
@@ -42,6 +49,15 @@ namespace cn.cssoftstudio.gimParser
 		private readonly HashSet<string> parsingDevStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 		private int extractionFinishedInvoked = 0;
+
+		private void LogDebug(string message)
+		{
+			if (!enableDebugLogs)
+			{
+				return;
+			}
+			Debug.Log($"[GimParserDebug] {message}");
+		}
 
 		private static string _Ifc2XbimUrl
 		{
@@ -122,15 +138,55 @@ namespace cn.cssoftstudio.gimParser
 				return false;
 			}
 			var current = target;
+			var result = new Dictionary<string, string>();
+			var visitedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			while (current != null)
 			{
 				var property = current.GetComponent<GimProperty>();
-				if (property != null && !string.IsNullOrEmpty(property.filePath))
+				if (property != null)
 				{
-					properties = ReadPropertyFile(property.filePath);
-					return properties != null && properties.Count > 0;
+					if (property.filePaths.Count > 0)
+					{
+						foreach (var file in property.filePaths)
+						{
+							if (string.IsNullOrWhiteSpace(file) || !visitedFiles.Add(file))
+							{
+								continue;
+							}
+							var item = ReadPropertyFile(file);
+							if (item == null)
+							{
+								continue;
+							}
+							foreach (var kv in item)
+							{
+								AddPropertyEntry(result, kv.Key, kv.Value);
+							}
+						}
+					}
+					else if (!string.IsNullOrEmpty(property.filePath))
+					{
+						if (!visitedFiles.Add(property.filePath))
+						{
+							current = current.parent;
+							continue;
+						}
+						var item = ReadPropertyFile(property.filePath);
+						if (item != null)
+						{
+							foreach (var kv in item)
+							{
+								AddPropertyEntry(result, kv.Key, kv.Value);
+							}
+						}
+					}
 				}
 				current = current.parent;
+			}
+			if (result.Count > 0)
+			{
+				properties = result;
+				return true;
 			}
 			return false;
 		}
@@ -149,7 +205,13 @@ namespace cn.cssoftstudio.gimParser
             extractionFinishedInvoked = 0;
 			parsingDevStack.Clear();
 
-			SevenZipBase.SetLibraryPath(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
+			var sevenZipDllPath = ResolveSevenZipDllPath();
+			if (string.IsNullOrEmpty(sevenZipDllPath))
+			{
+				Debug.LogError("未找到7z.dll，无法解压GIM。请确认打包目录包含 *_Data/Plugins/x86_64/7z.dll 或与exe同目录的7z.dll。");
+				return;
+			}
+			SevenZipBase.SetLibraryPath(sevenZipDllPath);
 
             if (!Directory.Exists(dir))
             {
@@ -161,7 +223,28 @@ namespace cn.cssoftstudio.gimParser
 				//Directory.Delete(dir, true);
 				StartCoroutine(ParseDataFiles());
             }
+			else
+			{
+				Debug.LogError($"GIM解压目录不存在或不可访问: {dir}");
+			}
         }
+
+		private string ResolveSevenZipDllPath()
+		{
+			var candidates = new List<string>();
+			candidates.Add(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
+			candidates.Add(Path.Combine(Path.GetDirectoryName(Application.dataPath), "7z.dll"));
+			candidates.Add(Path.Combine(Application.streamingAssetsPath, "7-Zip", "7z.dll"));
+			foreach (var path in candidates)
+			{
+				if (File.Exists(path))
+				{
+					LogDebug($"Use 7z.dll: {path}");
+					return path;
+				}
+			}
+			return null;
+		}
 
         private IEnumerator ParseDataFiles()
         {
@@ -219,7 +302,15 @@ namespace cn.cssoftstudio.gimParser
 
 		private Dictionary<string, string> ReadPropertyFile(string propertyFile)
 		{
+			if (string.IsNullOrWhiteSpace(propertyFile))
+			{
+				return null;
+			}
 			var candidates = new List<string>();
+			if (Path.IsPathRooted(propertyFile))
+			{
+				candidates.Add(propertyFile);
+			}
 			if (!string.IsNullOrEmpty(dirCBM))
 			{
 				candidates.Add(Path.Combine(dirCBM, propertyFile));
@@ -227,6 +318,14 @@ namespace cn.cssoftstudio.gimParser
 			if (!string.IsNullOrEmpty(dirDEV))
 			{
 				candidates.Add(Path.Combine(dirDEV, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dirPHM))
+			{
+				candidates.Add(Path.Combine(dirPHM, propertyFile));
+			}
+			if (!string.IsNullOrEmpty(dirMOD))
+			{
+				candidates.Add(Path.Combine(dirMOD, propertyFile));
 			}
 			if (!string.IsNullOrEmpty(dir))
 			{
@@ -238,23 +337,131 @@ namespace cn.cssoftstudio.gimParser
 				{
 					continue;
 				}
+				LogDebug($"ReadPropertyFile hit: {path}");
 				var map = new Dictionary<string, string>();
 				var lines = File.ReadAllLines(path);
 				foreach (var line in lines)
 				{
-					var parts = line.Split("=", StringSplitOptions.RemoveEmptyEntries);
-					if (parts.Length >= 3)
+					if (TryParsePropertyLine(line, out var key, out var value))
 					{
-						map[parts[1].Trim()] = parts[2].Trim();
-					}
-					else if (parts.Length >= 2)
-					{
-						map[parts[0].Trim()] = parts[1].Trim();
+						map[key] = value;
 					}
 				}
 				return map;
 			}
 			return null;
+		}
+
+		private static void AddPropertyEntry(Dictionary<string, string> map, string key, string value)
+		{
+			if (string.IsNullOrWhiteSpace(key))
+			{
+				return;
+			}
+			var normalizedKey = key.Trim();
+			var normalizedValue = value == null ? string.Empty : value.Trim();
+			if (!map.ContainsKey(normalizedKey))
+			{
+				map[normalizedKey] = normalizedValue;
+				return;
+			}
+			var i = 2;
+			var alias = $"{normalizedKey}#{i}";
+			while (map.ContainsKey(alias))
+			{
+				i++;
+				alias = $"{normalizedKey}#{i}";
+			}
+			map[alias] = normalizedValue;
+		}
+
+		private static bool TryParsePropertyLine(string line, out string key, out string value)
+		{
+			key = null;
+			value = null;
+			if (string.IsNullOrWhiteSpace(line))
+			{
+				return false;
+			}
+			var trimmed = line.Trim();
+			var firstEq = trimmed.IndexOf('=');
+			if (firstEq <= 0 || firstEq >= trimmed.Length - 1)
+			{
+				return false;
+			}
+
+			var left = trimmed.Substring(0, firstEq).Trim();
+			var right = trimmed.Substring(firstEq + 1).Trim();
+			if (string.IsNullOrEmpty(left))
+			{
+				return false;
+			}
+
+			var secondEq = right.IndexOf('=');
+			if (secondEq > 0)
+			{
+				var middle = right.Substring(0, secondEq).Trim();
+				var tail = right.Substring(secondEq + 1).Trim();
+				if (int.TryParse(left, out _) && !string.IsNullOrEmpty(middle))
+				{
+					key = middle;
+					value = tail;
+					return true;
+				}
+			}
+
+			key = left;
+			value = right;
+			return true;
+		}
+
+		private static bool TryParseMatrix(string csv, out Matrix4x4 matrix)
+		{
+			matrix = Matrix4x4.identity;
+			if (string.IsNullOrWhiteSpace(csv))
+			{
+				return false;
+			}
+			var comps = csv.Split(",");
+			if (comps.Length < 16)
+			{
+				return false;
+			}
+			var values = new float[16];
+			for (var i = 0; i < 16; i++)
+			{
+				if (!float.TryParse(comps[i], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+				{
+					return false;
+				}
+				if (float.IsNaN(parsed) || float.IsInfinity(parsed))
+				{
+					return false;
+				}
+				values[i] = parsed;
+			}
+			matrix = new Matrix4x4(
+				new Vector4(values[0], values[1], values[2], values[3]),
+				new Vector4(values[4], values[5], values[6], values[7]),
+				new Vector4(values[8], values[9], values[10], values[11]),
+				new Vector4(values[12], values[13], values[14], values[15]));
+
+			var t = matrix.GetT();
+			if (float.IsNaN(t.x) || float.IsNaN(t.y) || float.IsNaN(t.z))
+			{
+				return false;
+			}
+			return true;
+		}
+
+		private bool TryParseMatrixWithDebug(string csv, string context, out Matrix4x4 matrix)
+		{
+			var ok = TryParseMatrix(csv, out matrix);
+			if (!ok)
+			{
+				LogDebug($"Invalid matrix skipped at {context}. raw='{csv}'");
+			}
+			return ok;
 		}
 
 		private void EnsureSelectableColliders(GameObject modelRoot)
@@ -267,12 +474,30 @@ namespace cn.cssoftstudio.gimParser
 					continue;
 				}
 				var go = meshFilter.gameObject;
+				var mesh = meshFilter.sharedMesh;
+				if (useLightweightPickCollider && mesh.vertexCount > meshColliderVertexThreshold)
+				{
+					var meshCollider = go.GetComponent<MeshCollider>();
+					if (meshCollider != null)
+					{
+						Destroy(meshCollider);
+					}
+					var boxCollider = go.GetComponent<BoxCollider>();
+					if (boxCollider == null)
+					{
+						boxCollider = go.AddComponent<BoxCollider>();
+					}
+					boxCollider.center = mesh.bounds.center;
+					boxCollider.size = mesh.bounds.size;
+					continue;
+				}
+
 				var collider = go.GetComponent<MeshCollider>();
 				if (collider == null)
 				{
 					collider = go.AddComponent<MeshCollider>();
 				}
-				collider.sharedMesh = meshFilter.sharedMesh;
+				collider.sharedMesh = mesh;
 			}
 		}
 
@@ -345,10 +570,12 @@ namespace cn.cssoftstudio.gimParser
 			}
 		}
 
-        private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
+		private IEnumerator ParseCbmFile(string path, int level, GameObject parent)
         {
             var obj = new GameObject();
 			obj.transform.SetParent(parent.transform, false);
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
@@ -376,8 +603,7 @@ namespace cn.cssoftstudio.gimParser
 				}
 				else if (k.Equals("BASEFAMILY"))
 				{
-					var property = obj.AddComponent<GimProperty>();
-					property.filePath = v;
+					objProperty.AddFilePath(v);
 				}
 				else if (k.Equals("SYSTEMNAME1")) //三级子系统（子区域）- 系统名称
 				{
@@ -446,11 +672,12 @@ namespace cn.cssoftstudio.gimParser
 				}
 				else if (k.Equals("TRANSFORMMATRIX")) //四级设备（设施）- 相对变电站原点的空间变换矩阵
 				{
-					string[] comps = v.Split(",");
-					var mat = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-					obj.transform.localPosition = mat.GetT();
-					obj.transform.localRotation = mat.GetR();
-					obj.transform.localScale = mat.GetS();
+					if (TryParseMatrixWithDebug(v, $"CBM TRANSFORMMATRIX file={path}", out var matrix))
+					{
+						obj.transform.localPosition = matrix.GetT();
+						obj.transform.localRotation = matrix.GetR();
+						obj.transform.localScale = matrix.GetS();
+					}
 				}
 				else if (level < 5 && k.Equals("OBJECTMODELPOINTER")) //四级设备（设施）- dev文件引用
 				{
@@ -505,6 +732,8 @@ namespace cn.cssoftstudio.gimParser
 			obj.transform.localPosition = mat.GetT();
 			obj.transform.localRotation = mat.GetR();
 			obj.transform.localScale = mat.GetS();
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
@@ -529,10 +758,9 @@ namespace cn.cssoftstudio.gimParser
 				{
 					nameParts.Add(v);
 				}
-				else if (k.Equals("BASEFAMILY"))
+				else if (k.Equals("BASEFAMILY") || k.Equals("BASEFAMILYPOINTER"))
 				{
-					var property = obj.AddComponent<GimProperty>();
-					property.filePath = v;
+					objProperty.AddFilePath(v);
 				}
 				else if (k.Equals("SUBDEVICES.NUM")) //引用的dev文件数量
 				{
@@ -545,9 +773,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matDev = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-						yield return ParseDevFile(Path.Combine(dirDEV, v), obj, matDev);
+						if (TryParseMatrixWithDebug(lineMatSegments[1], $"DEV SUBDEVICE matrix file={path} target={v}", out var matDev))
+						{
+							yield return ParseDevFile(Path.Combine(dirDEV, v), obj, matDev);
+						}
 					}
 					i += len;
 				}
@@ -562,9 +791,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matPhm = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
-						yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
+						if (TryParseMatrixWithDebug(lineMatSegments[1], $"DEV SOLIDMODEL matrix file={path} target={v}", out var matPhm))
+						{
+							yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
+						}
 					}
 					i += len;
 				}
@@ -591,6 +821,8 @@ namespace cn.cssoftstudio.gimParser
 			obj.transform.localPosition = mat.GetT();
 			obj.transform.localRotation = mat.GetR();
 			obj.transform.localScale = mat.GetS();
+			var objProperty = obj.AddComponent<GimProperty>();
+			objProperty.AddFilePath(path);
 
 			string[] lines = File.ReadAllLines(path);
 			Debug.LogFormat("parse file: {0}", path);
@@ -619,8 +851,10 @@ namespace cn.cssoftstudio.gimParser
 
 						var lineMat = lines[j + 1].Trim();
 						var lineMatSegments = lineMat.Split("=", StringSplitOptions.RemoveEmptyEntries);
-						string[] comps = lineMatSegments[1].Split(",");
-						var matPhm = new Matrix4x4(new Vector4(float.Parse(comps[0]), float.Parse(comps[1]), float.Parse(comps[2]), float.Parse(comps[3])), new Vector4(float.Parse(comps[4]), float.Parse(comps[5]), float.Parse(comps[6]), float.Parse(comps[7])), new Vector4(float.Parse(comps[8]), float.Parse(comps[9]), float.Parse(comps[10]), float.Parse(comps[11])), new Vector4(float.Parse(comps[12]), float.Parse(comps[13]), float.Parse(comps[14]), float.Parse(comps[15])));
+						if (!TryParseMatrixWithDebug(lineMatSegments[1], $"PHM SOLIDMODEL matrix file={path} target={v}", out var matPhm))
+						{
+							continue;
+						}
 						if (ext.Equals(".PHM"))
 						{
 							yield return ParsePhmFile(Path.Combine(dirPHM, v), obj, matPhm);
@@ -720,8 +954,10 @@ namespace cn.cssoftstudio.gimParser
 				XmlNode EquilateralAngleSteel = entityNode.SelectSingleNode("EquilateralAngleSteel");
 				XmlNode FlatSteel = entityNode.SelectSingleNode("FlatSteel");
 				var v = TransformMatrix.Attributes["Value"].Value;
-				string[] stringsv = v.Split(",");
-				var m = new Matrix4x4(new Vector4(float.Parse(stringsv[0]), float.Parse(stringsv[1]), float.Parse(stringsv[2]), float.Parse(stringsv[3])), new Vector4(float.Parse(stringsv[4]), float.Parse(stringsv[5]), float.Parse(stringsv[6]), float.Parse(stringsv[7])), new Vector4(float.Parse(stringsv[8]), float.Parse(stringsv[9]), float.Parse(stringsv[10]), float.Parse(stringsv[11])), new Vector4(float.Parse(stringsv[12]), float.Parse(stringsv[13]), float.Parse(stringsv[14]), float.Parse(stringsv[15])));
+				if (!TryParseMatrixWithDebug(v, $"MOD Entity Transform file={path} id={id}", out var m))
+				{
+					continue;
+				}
 				m = matrix * m;
 
 				if (stretchedBodyNode != null)
@@ -731,13 +967,30 @@ namespace cn.cssoftstudio.gimParser
 					string array = stretchedBodyNode.Attributes["Array"].Value;
 					string[] strings = array.Split(";");
 					string[] normals = normal.Split(",");
+					if (normals.Length < 3)
+					{
+						continue;
+					}
 					Vector3 vector3Normal = new Vector3(float.Parse(normals[0]), float.Parse(normals[1]), float.Parse(normals[2]));
-					Vector3[] vector3s = new Vector3[strings.Length];
+					var points = new List<Vector3>(strings.Length);
 					for (int i = 0; i < strings.Length; i++)
 					{
+						if (string.IsNullOrWhiteSpace(strings[i]))
+						{
+							continue;
+						}
 						string[] strings1 = strings[i].Split(",");
-						vector3s[i] = new Vector3(float.Parse(strings1[0]), float.Parse(strings1[1]), float.Parse(strings1[2]));
+						if (strings1.Length < 3)
+						{
+							continue;
+						}
+						points.Add(new Vector3(float.Parse(strings1[0]), float.Parse(strings1[1]), float.Parse(strings1[2])));
 					}
+					if (points.Count < 3)
+					{
+						continue;
+					}
+					var vector3s = points.ToArray();
 					ProBuilderMesh proBuilderMesh = ProBuilderMesh.Create();
 					proBuilderMesh.gameObject.transform.SetParent(parent.transform, false);
 					proBuilderMesh.gameObject.transform.localPosition = m.GetT();
@@ -749,7 +1002,12 @@ namespace cn.cssoftstudio.gimParser
 
 					proBuilderMesh.CreateShapeFromPolygon(vector3s, 0f, false);
 
-					var vertices = proBuilderMesh.GetVertices();
+					var vertices = proBuilderMesh.GetVertices()?.ToList();
+					if (vertices == null || vertices.Count == 0 || proBuilderMesh.faces == null || proBuilderMesh.faces.Count == 0)
+					{
+						Destroy(proBuilderMesh.gameObject);
+						continue;
+					}
 
 					if (Vector3.Dot(vertices[0].normal, vector3Normal) < 0)
 					{
@@ -773,6 +1031,11 @@ namespace cn.cssoftstudio.gimParser
 					proBuilderMesh.Refresh();*/
 
 					proBuilderMesh.DuplicateAndFlip(proBuilderMesh.faces.ToArray());
+					if (proBuilderMesh.faces.Count == 0)
+					{
+						Destroy(proBuilderMesh.gameObject);
+						continue;
+					}
 					proBuilderMesh.Extrude(new Face[] { proBuilderMesh.faces[0] }, ExtrudeMethod.IndividualFaces, float.Parse(length));
 					proBuilderMesh.ToMesh();
 					proBuilderMesh.Refresh();
@@ -1551,12 +1814,8 @@ namespace cn.cssoftstudio.gimParser
 						//Directory.Delete(dir, true);
 					}
 					Directory.CreateDirectory(dir);
-					extractor.BeginExtractArchive(dir);
-
-					while (extractionFinishedInvoked == 0)
-					{
-
-					}
+					extractor.ExtractArchive(dir);
+					extractionFinishedInvoked = 1;
 				}
             });
         }
