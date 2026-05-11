@@ -1813,12 +1813,8 @@ namespace cn.cssoftstudio.gimParser
 						//Directory.Delete(dir, true);
 					}
 					Directory.CreateDirectory(dir);
-					extractor.BeginExtractArchive(dir);
-
-					while (extractionFinishedInvoked == 0)
-					{
-
-					}
+					extractor.ExtractArchive(dir);
+					extractionFinishedInvoked = 1;
 				}
             });
         }
