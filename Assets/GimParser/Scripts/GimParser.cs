@@ -205,7 +205,13 @@ namespace cn.cssoftstudio.gimParser
             extractionFinishedInvoked = 0;
 			parsingDevStack.Clear();
 
-			SevenZipBase.SetLibraryPath(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
+			var sevenZipDllPath = ResolveSevenZipDllPath();
+			if (string.IsNullOrEmpty(sevenZipDllPath))
+			{
+				Debug.LogError("未找到7z.dll，无法解压GIM。请确认打包目录包含 *_Data/Plugins/x86_64/7z.dll 或与exe同目录的7z.dll。");
+				return;
+			}
+			SevenZipBase.SetLibraryPath(sevenZipDllPath);
 
             if (!Directory.Exists(dir))
             {
@@ -217,7 +223,27 @@ namespace cn.cssoftstudio.gimParser
 				//Directory.Delete(dir, true);
 				StartCoroutine(ParseDataFiles());
             }
+			else
+			{
+				Debug.LogError($"GIM解压目录不存在或不可访问: {dir}");
+			}
         }
+
+		private string ResolveSevenZipDllPath()
+		{
+			var candidates = new List<string>();
+			candidates.Add(Path.Combine(Application.dataPath, "Plugins", "x86_64", "7z.dll"));
+			candidates.Add(Path.Combine(Path.GetDirectoryName(Application.dataPath), "7z.dll"));
+			foreach (var path in candidates)
+			{
+				if (File.Exists(path))
+				{
+					LogDebug($"Use 7z.dll: {path}");
+					return path;
+				}
+			}
+			return null;
+		}
 
         private IEnumerator ParseDataFiles()
         {
