@@ -7,6 +7,7 @@ using UFB;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using System;
 
 public class Controller : MonoBehaviour
 {
@@ -23,6 +24,7 @@ public class Controller : MonoBehaviour
     private Text propertyText;
     private ScrollRect propertyScrollRect;
     private GameObject propertyPanel;
+    private GameObject settingsPanel;
 
     private bool CanExport
     {
@@ -99,6 +101,7 @@ public class Controller : MonoBehaviour
         DialogAboutVisible = false;
 
         BuildPropertyPanel();
+        BuildSettingsPanel();
         SetPropertyPanelVisible(false);
     }
 
@@ -149,6 +152,8 @@ public class Controller : MonoBehaviour
             propertyText.text = "点击模型部件显示属性";
             ResetPropertyScroll();
         }
+
+        StartCoroutine(PlayModelOpenAnimation());
 
         Toast.Show("加载完成");
     }
@@ -218,7 +223,7 @@ public class Controller : MonoBehaviour
         panelRt.sizeDelta = new Vector2(420, -20);
         panelRt.anchoredPosition = new Vector2(-10, 0);
         var panelImage = panel.GetComponent<Image>();
-        panelImage.color = new Color(0, 0, 0, 0.45f);
+        panelImage.color = new Color(0.09f, 0.11f, 0.14f, 0.92f);
         panel.AddComponent<PropertyPanelDrag>();
         panel.AddComponent<PropertyPanelResize>();
 
@@ -230,7 +235,7 @@ public class Controller : MonoBehaviour
         headerRt.pivot = new Vector2(0.5f, 1);
         headerRt.sizeDelta = new Vector2(0, 40);
         var headerImage = header.GetComponent<Image>();
-        headerImage.color = new Color(0, 0, 0, 0.8f);
+        headerImage.color = new Color(0.15f, 0.19f, 0.24f, 0.98f);
 
         var headerTextGo = new GameObject("HeaderText", typeof(RectTransform), typeof(Text));
         headerTextGo.transform.SetParent(header.transform, false);
@@ -244,7 +249,7 @@ public class Controller : MonoBehaviour
         headerText.fontSize = 14;
         headerText.alignment = TextAnchor.MiddleLeft;
         headerText.color = Color.white;
-        headerText.text = "属性面板（标题固定，可拖动/缩放）";
+        headerText.text = "属性面板（拖动标题移动，右下角缩放）";
 
         var body = new GameObject("Body", typeof(RectTransform));
         body.transform.SetParent(panel.transform, false);
@@ -261,7 +266,7 @@ public class Controller : MonoBehaviour
         viewportRt.anchorMax = new Vector2(1, 1);
         viewportRt.offsetMin = new Vector2(10, 10);
         viewportRt.offsetMax = new Vector2(-28, -48);
-        viewport.GetComponent<Image>().color = new Color(0, 0, 0, 0.2f);
+        viewport.GetComponent<Image>().color = new Color(0.05f, 0.07f, 0.09f, 0.95f);
         viewport.GetComponent<Mask>().showMaskGraphic = false;
 
         var content = new GameObject("PropertyText", typeof(RectTransform), typeof(Text), typeof(ContentSizeFitter));
@@ -305,7 +310,7 @@ public class Controller : MonoBehaviour
         scrollbarRt.sizeDelta = new Vector2(14, 0);
         scrollbarRt.offsetMin = new Vector2(-14, 10);
         scrollbarRt.offsetMax = new Vector2(-4, -48);
-        scrollbarObj.GetComponent<Image>().color = new Color(1, 1, 1, 0.18f);
+        scrollbarObj.GetComponent<Image>().color = new Color(0.2f, 0.24f, 0.30f, 1f);
 
         var slidingArea = new GameObject("SlidingArea", typeof(RectTransform));
         slidingArea.transform.SetParent(scrollbarObj.transform, false);
@@ -323,7 +328,7 @@ public class Controller : MonoBehaviour
         handleRt.offsetMin = Vector2.zero;
         handleRt.offsetMax = Vector2.zero;
         var handleImg = handleObj.GetComponent<Image>();
-        handleImg.color = new Color(1, 1, 1, 0.65f);
+        handleImg.color = new Color(0.43f, 0.69f, 1f, 0.95f);
 
         var scrollbar = scrollbarObj.GetComponent<Scrollbar>();
         scrollbar.direction = Scrollbar.Direction.BottomToTop;
@@ -333,6 +338,133 @@ public class Controller : MonoBehaviour
         scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
 
         header.transform.SetAsLastSibling();
+    }
+
+    private void BuildSettingsPanel()
+    {
+        if (gimParser == null)
+        {
+            return;
+        }
+        var canvas = FindObjectOfType<Canvas>();
+        if (canvas == null)
+        {
+            return;
+        }
+
+        settingsPanel = new GameObject("SettingsPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        settingsPanel.transform.SetParent(canvas.transform, false);
+        var rt = settingsPanel.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 1);
+        rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1);
+        rt.anchoredPosition = new Vector2(8, -130);
+        rt.sizeDelta = new Vector2(260, 0);
+        settingsPanel.GetComponent<Image>().color = new Color(0.09f, 0.11f, 0.14f, 0.88f);
+
+        var layout = settingsPanel.GetComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(10, 10, 10, 10);
+        layout.spacing = 8;
+        layout.childForceExpandHeight = false;
+        layout.childControlHeight = true;
+        settingsPanel.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        CreatePanelTitle(settingsPanel.transform, "性能设置");
+        CreateToggleRow(settingsPanel.transform, "轻量拾取碰撞体", gimParser.useLightweightPickCollider, v => gimParser.useLightweightPickCollider = v);
+        CreateToggleRow(settingsPanel.transform, "静态合批优化", gimParser.enableStaticBatchingOptimization, v => gimParser.enableStaticBatchingOptimization = v);
+        CreateToggleRow(settingsPanel.transform, "关闭模型阴影", gimParser.disableRendererShadows, v => gimParser.disableRendererShadows = v);
+    }
+
+    private void CreatePanelTitle(Transform parent, string title)
+    {
+        var go = new GameObject("Title", typeof(RectTransform), typeof(Text));
+        go.transform.SetParent(parent, false);
+        var text = go.GetComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        text.fontSize = 16;
+        text.color = new Color(0.80f, 0.89f, 1f, 1f);
+        text.alignment = TextAnchor.MiddleLeft;
+        text.text = title;
+    }
+
+    private void CreateToggleRow(Transform parent, string labelText, bool initial, Action<bool> onValueChanged)
+    {
+        var row = new GameObject(labelText, typeof(RectTransform), typeof(Toggle), typeof(Image));
+        row.transform.SetParent(parent, false);
+        row.GetComponent<Image>().color = new Color(0.13f, 0.16f, 0.20f, 0.95f);
+        var rowRt = row.GetComponent<RectTransform>();
+        rowRt.sizeDelta = new Vector2(0, 30);
+
+        var toggle = row.GetComponent<Toggle>();
+
+        var checkmarkBg = new GameObject("CheckBg", typeof(RectTransform), typeof(Image));
+        checkmarkBg.transform.SetParent(row.transform, false);
+        var checkBgRt = checkmarkBg.GetComponent<RectTransform>();
+        checkBgRt.anchorMin = new Vector2(0, 0.5f);
+        checkBgRt.anchorMax = new Vector2(0, 0.5f);
+        checkBgRt.anchoredPosition = new Vector2(12, 0);
+        checkBgRt.sizeDelta = new Vector2(18, 18);
+        checkmarkBg.GetComponent<Image>().color = new Color(0.22f, 0.27f, 0.34f, 1f);
+
+        var checkmark = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
+        checkmark.transform.SetParent(checkmarkBg.transform, false);
+        var checkmarkRt = checkmark.GetComponent<RectTransform>();
+        checkmarkRt.anchorMin = Vector2.zero;
+        checkmarkRt.anchorMax = Vector2.one;
+        checkmarkRt.offsetMin = new Vector2(3, 3);
+        checkmarkRt.offsetMax = new Vector2(-3, -3);
+        checkmark.GetComponent<Image>().color = new Color(0.43f, 0.69f, 1f, 1f);
+
+        var label = new GameObject("Label", typeof(RectTransform), typeof(Text));
+        label.transform.SetParent(row.transform, false);
+        var labelRt = label.GetComponent<RectTransform>();
+        labelRt.anchorMin = new Vector2(0, 0);
+        labelRt.anchorMax = new Vector2(1, 1);
+        labelRt.offsetMin = new Vector2(38, 0);
+        labelRt.offsetMax = new Vector2(-8, 0);
+        var labelTextComp = label.GetComponent<Text>();
+        labelTextComp.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        labelTextComp.fontSize = 14;
+        labelTextComp.alignment = TextAnchor.MiddleLeft;
+        labelTextComp.color = Color.white;
+        labelTextComp.text = labelText;
+
+        toggle.targetGraphic = row.GetComponent<Image>();
+        toggle.graphic = checkmark.GetComponent<Image>();
+        toggle.isOn = initial;
+        toggle.onValueChanged.AddListener(v => onValueChanged(v));
+    }
+
+    private IEnumerator PlayModelOpenAnimation()
+    {
+        if (gimParser == null || gimParser.Model == null || Camera.main == null)
+        {
+            yield break;
+        }
+
+        var model = gimParser.Model.transform;
+        var startScale = model.localScale * 0.96f;
+        var endScale = model.localScale;
+        model.localScale = startScale;
+
+        var cam = Camera.main;
+        var targetFov = cam.fieldOfView;
+        var startFov = Mathf.Min(80f, targetFov + 6f);
+        cam.fieldOfView = startFov;
+
+        var duration = 0.28f;
+        var elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            var t = Mathf.Clamp01(elapsed / duration);
+            var eased = 1f - Mathf.Pow(1f - t, 3f);
+            model.localScale = Vector3.LerpUnclamped(startScale, endScale, eased);
+            cam.fieldOfView = Mathf.LerpUnclamped(startFov, targetFov, eased);
+            yield return null;
+        }
+        model.localScale = endScale;
+        cam.fieldOfView = targetFov;
     }
 
     private void HandlePickProperty()
