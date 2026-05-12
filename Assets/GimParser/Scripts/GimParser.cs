@@ -33,6 +33,8 @@ namespace cn.cssoftstudio.gimParser
 		public bool useLightweightPickCollider = true;
 		[Tooltip("Meshes with vertex count above this threshold will use BoxCollider instead of MeshCollider when lightweight mode is enabled.")]
 		public int meshColliderVertexThreshold = 4000;
+		[Tooltip("Try static batching after parsing to reduce draw calls for large station models.")]
+		public bool enableStaticBatchingOptimization = true;
 
 		private string dir;
         private string dirCBM;
@@ -293,11 +295,29 @@ namespace cn.cssoftstudio.gimParser
 			if (root != null)
 			{
 				root.transform.localRotation = Quaternion.Euler(-90, 0, 0);
+				OptimizeModelForRuntime(root);
 				EnsureSelectableColliders(root);
 			}
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\byq.fbx");
 			//AsciiFBXExporter.FBXExporter.ExportGameObjAtRuntime(root, "E:\\lbdev\\gim-parser\\export\\", "byq.fbx", "textures", true);
 			onParseFinished.Invoke();
+		}
+
+		private void OptimizeModelForRuntime(GameObject modelRoot)
+		{
+			if (!enableStaticBatchingOptimization || modelRoot == null)
+			{
+				return;
+			}
+			try
+			{
+				StaticBatchingUtility.Combine(modelRoot);
+				LogDebug("Static batching finished.");
+			}
+			catch (Exception ex)
+			{
+				Debug.LogWarning($"静态合批优化失败，已忽略: {ex.Message}");
+			}
 		}
 
 		private Dictionary<string, string> ReadPropertyFile(string propertyFile)
