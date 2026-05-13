@@ -16,7 +16,6 @@ using System.Collections;
 using System.Globalization;
 using MeshMakerNamespace;
 using UnityEngine.Events;
-using UnityEngine.Rendering;
 
 namespace cn.cssoftstudio.gimParser
 {
@@ -36,8 +35,6 @@ namespace cn.cssoftstudio.gimParser
 		public int meshColliderVertexThreshold = 4000;
 		[Tooltip("Try static batching after parsing to reduce draw calls for large station models.")]
 		public bool enableStaticBatchingOptimization = true;
-		[Tooltip("Disable dynamic shadows on parsed model renderers to improve FPS on very large scenes.")]
-		public bool disableRendererShadows = true;
 
 		private string dir;
         private string dirCBM;
@@ -308,31 +305,18 @@ namespace cn.cssoftstudio.gimParser
 
 		private void OptimizeModelForRuntime(GameObject modelRoot)
 		{
-			if (modelRoot == null)
+			if (!enableStaticBatchingOptimization || modelRoot == null)
 			{
 				return;
 			}
-			if (disableRendererShadows)
+			try
 			{
-				var renderers = modelRoot.GetComponentsInChildren<Renderer>(true);
-				foreach (var renderer in renderers)
-				{
-					renderer.shadowCastingMode = ShadowCastingMode.Off;
-					renderer.receiveShadows = false;
-				}
-				LogDebug($"Renderer shadows disabled: {renderers.Length}");
+				StaticBatchingUtility.Combine(modelRoot);
+				LogDebug("Static batching finished.");
 			}
-			if (enableStaticBatchingOptimization)
+			catch (Exception ex)
 			{
-				try
-				{
-					StaticBatchingUtility.Combine(modelRoot);
-					LogDebug("Static batching finished.");
-				}
-				catch (Exception ex)
-				{
-					Debug.LogWarning($"静态合批优化失败，已忽略: {ex.Message}");
-				}
+				Debug.LogWarning($"静态合批优化失败，已忽略: {ex.Message}");
 			}
 		}
 
