@@ -19,6 +19,11 @@ using Unity.VisualScripting;
 public class CreateModel : MonoBehaviour
 {
     public int smooth = 20;
+    [Header("Large Model Performance")]
+    [Tooltip("Maximum milliseconds spent building GIM geometry before yielding to the next frame.")]
+    public float maxBuildMillisecondsPerFrame = 8f;
+    [Tooltip("Generate MeshCollider components for combined GIM meshes. Disable for smoother loading and rendering when click/physics picking is not required.")]
+    public bool generateMeshColliders = true;
     //public TreeView TreeView;
     public Material material;
     public List<GameObject> ProBuilderMeshItem;
@@ -32,6 +37,10 @@ public class CreateModel : MonoBehaviour
     private const int MaxRecursiveDepth = 64;
     private readonly HashSet<string> phmRecursionStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> devRecursionStack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> propertiesCache = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> devPropertiesCache = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, string>> famPropertiesCache = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+    private float frameBudgetStartTime;
 
     private static string _7zExeUrl
     {
@@ -64,6 +73,26 @@ public class CreateModel : MonoBehaviour
         // 计算两个坐标之间的距离
         double distance = Math.Sqrt(Math.Pow(coordArray2[0] - coordArray1[0], 2) + Math.Pow(coordArray2[1] - coordArray1[1], 2) + Math.Pow(coordArray2[2] - coordArray1[2], 2));
         return distance;
+    }
+
+    private void ResetFrameBudget()
+    {
+        frameBudgetStartTime = Time.realtimeSinceStartup;
+    }
+
+    private bool ShouldYieldForFrameBudget()
+    {
+        if (maxBuildMillisecondsPerFrame <= 0f)
+        {
+            return false;
+        }
+
+        return (Time.realtimeSinceStartup - frameBudgetStartTime) * 1000f >= maxBuildMillisecondsPerFrame;
+    }
+
+    private void MarkMeshAsStatic(GameObject gameObject)
+    {
+        gameObject.isStatic = true;
     }
 
     private Material GetMaterialByColor(Color color)
@@ -184,6 +213,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (Cuboid != null)
             {
@@ -209,6 +244,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (TerminalBlock != null)
             {
@@ -272,6 +313,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (Cylinder != null)
             {
@@ -302,6 +349,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (Ring != null)
             {
@@ -326,6 +379,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (TruncatedCone != null)
             {
@@ -390,6 +449,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMeshMin.name = visible;
                 proBuilderMeshes.Add(proBuilderMeshMin);
                 proBuilderMeshDic.Add(id, proBuilderMeshMin);
+                MarkMeshAsStatic(proBuilderMeshMin.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (PorcelainBushing != null)
             {
@@ -470,6 +535,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMeshH.name = visible;
                proBuilderMeshes.Add(proBuilderMeshH);
                proBuilderMeshDic.Add(id, proBuilderMeshH);
+                    MarkMeshAsStatic(proBuilderMeshH.gameObject);
+                    if (ShouldYieldForFrameBudget())
+                    {
+                        yield return null;
+                        ResetFrameBudget();
+                    }
             }
             else if (Sphere != null)
             {
@@ -485,6 +556,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (Wire != null)
             {
@@ -531,6 +608,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             else if (Insulator != null)
             {
@@ -606,6 +689,12 @@ public class CreateModel : MonoBehaviour
                     proBuilderMeshH.name = visible;
                     proBuilderMeshes.Add(proBuilderMeshH);
                     proBuilderMeshDic.Add(id, proBuilderMeshH);
+                    MarkMeshAsStatic(proBuilderMeshH.gameObject);
+                    if (ShouldYieldForFrameBudget())
+                    {
+                        yield return null;
+                        ResetFrameBudget();
+                    }
                 }
             }
             else if (CircularGasket != null)
@@ -623,6 +712,12 @@ public class CreateModel : MonoBehaviour
                 proBuilderMesh.name = visible;
                 proBuilderMeshes.Add(proBuilderMesh);
                 proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             //偏移矩形台
             else if (OffsetRectangularTable != null) {
@@ -769,7 +864,13 @@ public class CreateModel : MonoBehaviour
 
 /*
                 proBuilderMeshes.Add(proBuilderMesh);
-                proBuilderMeshDic.Add(id, proBuilderMesh);*/
+                proBuilderMeshDic.Add(id, proBuilderMesh);
+                MarkMeshAsStatic(proBuilderMesh.gameObject);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }*/
 
             }
             else if (RoundSteelTube != null)
@@ -850,7 +951,16 @@ public class CreateModel : MonoBehaviour
                 go.transform.SetParent(p.transform, false);
                 go.AddComponent<MeshFilter>().mesh = item;
                 go.AddComponent<MeshRenderer>().material = mat;
-                go.AddComponent<MeshCollider>().sharedMesh = item;
+                if (generateMeshColliders)
+                {
+                    go.AddComponent<MeshCollider>().sharedMesh = item;
+                }
+                MarkMeshAsStatic(go);
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             action.Invoke(p);
         }
@@ -863,7 +973,11 @@ public class CreateModel : MonoBehaviour
             go.transform.localScale = m4.GetS() * ratio;
             go.AddComponent<MeshFilter>().mesh = meshes[0];
             go.AddComponent<MeshRenderer>().material = mat;
-            go.AddComponent<MeshCollider>().sharedMesh = meshes[0];
+            if (generateMeshColliders)
+            {
+                go.AddComponent<MeshCollider>().sharedMesh = meshes[0];
+            }
+            MarkMeshAsStatic(go);
             action.Invoke(go);
         }
         
@@ -919,8 +1033,14 @@ public class CreateModel : MonoBehaviour
     }
     public Dictionary<string, string> getPropertiesDev(string path)
     {
+        string normalizedPath = Path.GetFullPath(path);
+        Dictionary<string, string> cachedMap;
+        if (devPropertiesCache.TryGetValue(normalizedPath, out cachedMap))
+        {
+            return cachedMap;
+        }
+
         Dictionary<string, string> map = new Dictionary<string, string>();
-        //������ѹ��cbm
         string[] Properties = File.ReadAllLines(path);
         for (int i = 0; i < Properties.Length; i++)
         {
@@ -966,38 +1086,51 @@ public class CreateModel : MonoBehaviour
             else { map.Add(item[0], item[1]); }
 
         }
+        devPropertiesCache[normalizedPath] = map;
         return map;
     }
     public Dictionary<string, string> getProperties(string paths)
     {
+        string normalizedPath = Path.GetFullPath(paths);
+        Dictionary<string, string> cachedMap;
+        if (propertiesCache.TryGetValue(normalizedPath, out cachedMap))
+        {
+            return cachedMap;
+        }
+
         Dictionary<string, string> map = new Dictionary<string, string>();
-        //������ѹ��cbm
         string[] Properties = File.ReadAllLines(paths);
         for (int i = 0; i < Properties.Length; i++)
         {
-            string[] item = Properties[i].Split("=");
-            try { map.Add(item[0].Trim(), item[1].Trim()); }
-            catch (Exception e)
+            string[] item = Properties[i].Split('=');
+            if (item.Length >= 2)
             {
-                e.GetBaseException();
+                map[item[0].Trim()] = item[1].Trim();
             }
         }
+        propertiesCache[normalizedPath] = map;
         return map;
     }
     public Dictionary<string, string> getPropertiesFam(string path)
     {
+        string normalizedPath = Path.GetFullPath(path);
+        Dictionary<string, string> cachedMap;
+        if (famPropertiesCache.TryGetValue(normalizedPath, out cachedMap))
+        {
+            return cachedMap;
+        }
+
         Dictionary<string, string> map = new Dictionary<string, string>();
-        //������ѹ��cbm
         string[] Properties = File.ReadAllLines(path);
         for (int i = 0; i < Properties.Length; i++)
         {
-            string[] item = Properties[i].Split("=");
-            try { map.Add(item[1], item[2]); }
-            catch (Exception e)
+            string[] item = Properties[i].Split('=');
+            if (item.Length >= 3)
             {
-                e.GetBaseException();
+                map[item[1]] = item[2];
             }
         }
+        famPropertiesCache[normalizedPath] = map;
         return map;
     }
     List<string> loadFiles(string filepath)
@@ -1122,6 +1255,10 @@ public class CreateModel : MonoBehaviour
     {
         phmRecursionStack.Clear();
         devRecursionStack.Clear();
+        propertiesCache.Clear();
+        devPropertiesCache.Clear();
+        famPropertiesCache.Clear();
+        ResetFrameBudget();
         fileUrl = Loadpath;
         yield return Load();
         GimUIController.treeItems = TreeGameObjects;
@@ -1174,6 +1311,11 @@ public class CreateModel : MonoBehaviour
                         models.Add(result);
                     }
                 });
+                if (ShouldYieldForFrameBudget())
+                {
+                    yield return null;
+                    ResetFrameBudget();
+                }
             }
             //combine models
             if (models.Count > 1)
@@ -1187,6 +1329,7 @@ public class CreateModel : MonoBehaviour
             Mesh mesh = new Mesh();
             MeshUtility.Compile(models[0], mesh);
             models[0].gameObject.GetComponent<MeshFilter>().mesh = mesh;
+            MarkMeshAsStatic(models[0].gameObject);
             Destroy(models[0].gameObject.GetComponent<ProBuilderMesh>());
 
             foreach (var item in unsupportCombineObjs)
@@ -1202,6 +1345,11 @@ public class CreateModel : MonoBehaviour
             string[] strings2 = f5Dictionary["SUBDEVICES.TRANSFORMMATRIX" + i].Split(",");
             var m4 = new Matrix4x4(new Vector4(float.Parse(strings2[0]), float.Parse(strings2[1]), float.Parse(strings2[2]), float.Parse(strings2[3])), new Vector4(float.Parse(strings2[4]), float.Parse(strings2[5]), float.Parse(strings2[6]), float.Parse(strings2[7])), new Vector4(float.Parse(strings2[8]), float.Parse(strings2[9]), float.Parse(strings2[10]), float.Parse(strings2[11])), new Vector4(float.Parse(strings2[12]) * ratio, float.Parse(strings2[13]) * ratio, float.Parse(strings2[14]) * ratio, float.Parse(strings2[15])));
             yield return LoadDev2(dev.gameObject, path + "//DEV//" + f5Dictionary["SUBDEVICE" + i], m4, myCustomData, depth + 1);
+            if (ShouldYieldForFrameBudget())
+            {
+                yield return null;
+                ResetFrameBudget();
+            }
         }
         f4MyCustomData.childs.Add(myCustomData);
         devRecursionStack.Remove(normalizedDevFile);
@@ -1257,6 +1405,11 @@ public class CreateModel : MonoBehaviour
                 {
                     unsupportCombineObjs.Add(result);
                 });
+            }
+            if (ShouldYieldForFrameBudget())
+            {
+                yield return null;
+                ResetFrameBudget();
             }
         }
         Debugger.Log(1, "phm:{}", phmPath);
@@ -1446,7 +1599,11 @@ public class CreateModel : MonoBehaviour
 						Mesh mesh = new Mesh();
 						MeshUtility.Compile(probuilderMeshList[0], mesh);
 						probuilderMeshList[0].GetComponent<MeshFilter>().mesh = mesh;
-						probuilderMeshList[0].gameObject.AddComponent<MeshCollider>().sharedMesh = mesh;
+						if (generateMeshColliders)
+						{
+							probuilderMeshList[0].gameObject.AddComponent<MeshCollider>().sharedMesh = mesh;
+						}
+						MarkMeshAsStatic(probuilderMeshList[0].gameObject);
 
 						foreach (var item in unsupportCombineObjs)
 						{
@@ -1488,6 +1645,7 @@ public class CreateModel : MonoBehaviour
     }
     public IEnumerator Load()
     {
+        ResetFrameBudget();
         var filePathWithoutExtension = Path.Combine(Path.GetDirectoryName(fileUrl) ?? string.Empty, Path.GetFileNameWithoutExtension(fileUrl));
         string filePath = filePathWithoutExtension + "\\";
         path = filePath;
